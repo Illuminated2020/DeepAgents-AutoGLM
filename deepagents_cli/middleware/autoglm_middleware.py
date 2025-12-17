@@ -4,7 +4,7 @@ This middleware integrates Open-AutoGLM's phone agent capabilities into deepagen
 providing Android device control through vision-language models and ADB.
 
 Source: Adapted from Open-AutoGLM project
-Original: https://github.com/THUDM/AutoGLM
+Original: https://github.com/zai-org/Open-AutoGLM
 
 Features:
 - High-level phone_task tool for autonomous task execution

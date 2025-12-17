@@ -1,6 +1,6 @@
 # 🚀🧠 DeepAgents-AutoGLM
 
-基于 [deepagents](https://github.com/langchain-ai/deepagents) 框架集成 [AutoGLM](https://github.com/zai-org/Open-AutoGLM) 手机控制能力的开源智能编程助手，可在终端中运行，并支持 Android 设备自动化控制。
+基于 [deepagents](https://github.com/langchain-ai/deepagents) 框架集成 [AutoGLM](https://github.com/zai-org/Open-AutoGLM) 手机控制能力的开源智能助手，可在终端中运行，并支持 Android 设备自动化控制。
 
 **核心特性：**
 - **内置工具集**: 文件操作（读、写、编辑、搜索）、Shell 命令、网络搜索、子代理委托
@@ -424,16 +424,23 @@ adb devices
 ```
 
 **WiFi 连接：**
+
+无线调试（Android 11+，推荐）
 ```bash
-# 1. 先通过 USB 连接
-# 2. 获取设备 IP 地址（设置 → 关于手机 → 状态信息）
-# 3. 启用 TCP/IP 模式
-adb tcpip 5555
+# 1. 在设备上启用无线调试
+#    设置 → 开发者选项 → 无线调试 → 启用
+#    点击"使用配对码配对设备"
 
-# 4. 通过 WiFi 连接
-adb connect <设备IP>:5555
+# 2. 配对设备（输入设备上显示的配对码）
+adb pair <设备IP>:<配对端口>
+# 示例: adb pair 192.168.213.55:46201
+# Enter pairing code: 441750
 
-# 5. 验证连接
+# 3. 连接设备（使用无线调试端口，不是配对端口）
+adb connect <设备IP>:<调试端口>
+# 示例: adb connect 192.168.213.55:41589
+
+# 4. 验证连接
 adb devices
 ```
 
