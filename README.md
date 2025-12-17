@@ -10,7 +10,7 @@
 - **Android 自动化**（可选）: 集成 AutoGLM 实现智能手机控制（点击、滑动、输入等）
 - **视觉引导控制**（可选）: 使用视觉-语言模型理解和操作手机 GUI 
 
-<img src="./cli-banner.jpg" alt="deep agent" width="100%"/>
+<img src="./example-1.png" alt="deep agent" width="100%"/>
 
 ## 🚀 快速开始
 

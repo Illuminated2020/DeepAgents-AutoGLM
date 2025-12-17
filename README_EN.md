@@ -10,7 +10,7 @@ An open-source intelligent programming assistant based on the [deepagents](https
 - **Android Automation** (Optional): Integrated AutoGLM for intelligent phone control (tap, swipe, input, etc.)
 - **Vision-Guided Control** (Optional): Use vision-language models to understand and operate phone GUI
 
-<img src="./cli-banner.jpg" alt="deep agent" width="100%"/>
+<img src="./example-1.png" alt="deep agent" width="100%"/>
 
 ## 🚀 Quick Start
 
