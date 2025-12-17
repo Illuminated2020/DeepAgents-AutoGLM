@@ -1,5 +1,7 @@
 # 🚀🧠 DeepAgents-AutoGLM
 
+English | [中文](./README.md)
+
 An open-source intelligent programming assistant based on the [deepagents](https://github.com/langchain-ai/deepagents) framework integrated with [AutoGLM](https://github.com/zai-org/Open-AutoGLM) phone control capabilities. Runs in the terminal and supports Android device automation.
 
 **Core Features:**

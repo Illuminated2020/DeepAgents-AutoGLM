@@ -1,5 +1,7 @@
 # 🚀🧠 DeepAgents-AutoGLM
 
+[English](./README_EN.md) | 中文
+
 基于 [deepagents](https://github.com/langchain-ai/deepagents) 框架集成 [AutoGLM](https://github.com/zai-org/Open-AutoGLM) 手机控制能力的开源智能助手，可在终端中运行，并支持 Android 设备自动化控制。
 
 **核心特性：**
