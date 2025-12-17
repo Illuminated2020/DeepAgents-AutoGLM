@@ -52,7 +52,7 @@ def get_phone_agent_prompt_zh() -> str:
 - do(action="Tap", element=[x,y], message="重要操作")
     基本功能同Tap，点击涉及财产、支付、隐私等敏感按钮时触发。
 - do(action="Type", text="xxx")
-    Type是输入操作，在当前聚焦的输入框中输入文本。使用此操作前，请确保输入框已被聚焦（先点击它）。输入的文本将像使用键盘输入一样输入。重要提示：手机可能正在使用 ADB 键盘，该键盘不会像普通键盘那样占用屏幕空间。要确认键盘已激活，请查看屏幕底部是否显示 'ADB Keyboard {ON}' 类似的文本，或者检查输入框是否处于激活/高亮状态。不要仅仅依赖视觉上的键盘显示。自动清除文本：当你使用输入操作时，输入框中现有的任何文本（包括占位符文本和实际输入）都会在输入新文本前自动清除。你无需在输入前手动清除文本——直接使用输入操作输入所需文本即可。操作完成后，你将自动收到结果状态的截图。
+    Type是输入操作，在当前聚焦的输入框中输入文本。使用此操作前，请确保输入框已被聚焦（先点击它）。重要提示：手机可能正在使用 ADB 键盘，该键盘不会像普通键盘那样占用屏幕空间。要确认键盘已激活，请查看屏幕底部是否显示 'ADB Keyboard {ON}' 类似的文本，或者检查输入框是否处于激活/高亮状态。自动清除文本：当你使用输入操作时，输入框中现有的任何文本都会在输入新文本前自动清除。你无需在输入前手动清除文本——直接使用输入操作输入所需文本即可。长文本处理：尽可能一次性输入完整内容，只有当单次输入内容超过100字时才分段输入。不要一句一句输入，应该将多句话合并为一次输入。操作完成后，你将自动收到结果状态的截图。
 - do(action="Type_Name", text="xxx")
     Type_Name是输入人名的操作，基本功能同Type。
 - do(action="Interact")
@@ -147,7 +147,8 @@ Your output should STRICTLY follow the format:
   do(action="Tap", element=[x,y])
   </answer>
 - **Type**
-  Enter text into the currently focused input field.
+  Enter text into the currently focused input field. The input field must be focused first (tap on it). The keyboard (ADB Keyboard) may not be visually displayed on screen but is active in the background.
+  ⚠️ **Long Text Handling**: Input complete content in one action whenever possible. Only split into multiple Type actions when single input exceeds 100 characters. Do not input sentence by sentence; combine multiple sentences into one input action.
   **Example**:
   <answer>
   do(action="Type", text="Hello World")

@@ -482,25 +482,67 @@ def type_text(text: str, device_id: str | None = None) -> None:
 
     Note:
         Requires ADB Keyboard to be installed and enabled.
+
+        For long text (>500 chars), automatically splits into chunks to avoid
+        Android Binder transaction size limits (1MB shared buffer).
+
+        Safe chunk size: ~500 chars (after base64 encoding ~667 bytes + overhead).
+
+    References:
+        - Android Binder buffer: 1MB shared across all process transactions
+        - Recommended Intent data size: a few KB to avoid TransactionTooLargeException
+        - Base64 encoding overhead: ~33% size increase
     """
     adb_prefix = _get_adb_prefix(device_id)
-    encoded_text = base64.b64encode(text.encode("utf-8")).decode("utf-8")
 
-    subprocess.run(
-        adb_prefix
-        + [
-            "shell",
-            "am",
-            "broadcast",
-            "-a",
-            "ADB_INPUT_B64",
-            "--es",
-            "msg",
-            encoded_text,
-        ],
-        capture_output=True,
-        text=True,
-    )
+    # Maximum safe characters per chunk to avoid Binder transaction limits
+    # Conservative value to ensure reliability across different devices
+    MAX_CHUNK_SIZE = 500
+
+    # Short text: use original single-broadcast approach
+    if len(text) <= MAX_CHUNK_SIZE:
+        encoded_text = base64.b64encode(text.encode("utf-8")).decode("utf-8")
+        subprocess.run(
+            adb_prefix
+            + [
+                "shell",
+                "am",
+                "broadcast",
+                "-a",
+                "ADB_INPUT_B64",
+                "--es",
+                "msg",
+                encoded_text,
+            ],
+            capture_output=True,
+            text=True,
+        )
+    else:
+        # Long text: split into chunks and send sequentially
+        for i in range(0, len(text), MAX_CHUNK_SIZE):
+            chunk = text[i : i + MAX_CHUNK_SIZE]
+            encoded_chunk = base64.b64encode(chunk.encode("utf-8")).decode("utf-8")
+
+            subprocess.run(
+                adb_prefix
+                + [
+                    "shell",
+                    "am",
+                    "broadcast",
+                    "-a",
+                    "ADB_INPUT_B64",
+                    "--es",
+                    "msg",
+                    encoded_chunk,
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            # Small delay between chunks to ensure proper delivery
+            # Avoid overwhelming the Binder buffer with rapid broadcasts
+            if i + MAX_CHUNK_SIZE < len(text):  # Not the last chunk
+                time.sleep(0.15)  # 150ms between chunks
 
 
 def clear_text(device_id: str | None = None) -> None:

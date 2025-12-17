@@ -205,7 +205,11 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         """
 
         def signal_handler(signum: int, frame: Any) -> None:
-            """Handle interrupt signal by setting the interrupt flag."""
+            """Handle interrupt signal by setting the interrupt flag and raising KeyboardInterrupt.
+
+            IMPORTANT: We must raise KeyboardInterrupt to propagate the interrupt to the
+            main agent loop. Otherwise, the interrupt is "swallowed" and the agent continues running.
+            """
             # signum and frame are required by signal.signal but not used
             _ = (signum, frame)
 
@@ -217,8 +221,12 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             print("(This may take a few seconds if waiting for model response)")
             print("="*60 + "\n")
 
-            # Set the interrupt flag
+            # Set the interrupt flag for phone_task internal checking
             self._interrupt_flag.set()
+
+            # CRITICAL: Raise KeyboardInterrupt to propagate to main agent loop
+            # Without this, the interrupt is caught but not propagated, and the agent continues
+            raise KeyboardInterrupt()
 
         # Register signal handler for SIGINT (Ctrl+C)
         signal.signal(signal.SIGINT, signal_handler)
@@ -516,8 +524,14 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                         print(f"Total steps: {step}/{self.config.max_steps}")
                         print(f"{'='*60}\n")
                     self._cleanup_resources()
+
+                    # Return with clear completion message to prevent Agent from retrying
                     return ToolMessage(
-                        content=f"Phone task completed successfully. {finish_message}",
+                        content=(
+                            f"✅ PHONE TASK COMPLETED SUCCESSFULLY ✅\n\n"
+                            f"{finish_message}\n\n"
+                            f"The task has been fully completed. No further action is needed."
+                        ),
                         tool_call_id=tool_call_id,
                         name="phone_task",
                         status="success",
@@ -681,14 +695,14 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                     # Switch to ADB keyboard and save original IME for cleanup
                     original_ime = adb_controller.set_adb_keyboard(device_id)
                     self._original_ime = original_ime  # Track for cleanup on interrupt
-                    time.sleep(0.5)  # keyboard_switch_delay
+                    time.sleep(1.0)  # keyboard_switch_delay - increased to ensure keyboard is fully activated
 
                     # Clear existing text and type new text
                     adb_controller.clear_text(device_id)
-                    time.sleep(0.2)  # text_clear_delay
+                    time.sleep(0.5)  # text_clear_delay - increased for stability
 
                     adb_controller.type_text(text, device_id)
-                    time.sleep(0.3)  # text_input_delay
+                    time.sleep(1.0)  # text_input_delay - increased to ensure text is fully processed
 
                     return {"success": True, "message": f"Typed: {text}"}
 
