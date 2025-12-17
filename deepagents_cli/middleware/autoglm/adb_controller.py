@@ -569,12 +569,12 @@ def restore_keyboard(ime: str, device_id: str | None = None) -> None:
 
 
 def launch_app(
-    package_name: str, device_id: str | None = None, delay: float | None = None
+    app_name: str, device_id: str | None = None, delay: float | None = None
 ) -> bool:
-    """Launch an app by package name.
+    """Launch an app by name.
 
     Args:
-        package_name: The Android package name (e.g., "com.tencent.mm").
+        app_name: The app name (e.g., "微信", "Chrome", "Settings") or package name.
         device_id: Optional device ID.
         delay: Delay in seconds after launching.
 
@@ -583,6 +583,15 @@ def launch_app(
     """
     if delay is None:
         delay = DEFAULT_LAUNCH_DELAY
+
+    # Import apps module for name to package conversion
+    from deepagents_cli.middleware.autoglm import apps
+
+    # Try to find package name from app name
+    package_name = apps.find_package_name(app_name)
+    if not package_name:
+        # Assume app_name is already a package name
+        package_name = app_name
 
     adb_prefix = _get_adb_prefix(device_id)
 
@@ -610,13 +619,14 @@ def launch_app(
 
 
 def get_current_app(device_id: str | None = None) -> str:
-    """Get the package name of the currently focused app.
+    """Get the app name of the currently focused app.
 
     Args:
         device_id: Optional device ID.
 
     Returns:
-        The package name of the current app, or empty string if not found.
+        The app name (user-friendly) of the current app, or "System Home" if not found.
+        Examples: "微信", "Chrome", "System Home"
     """
     adb_prefix = _get_adb_prefix(device_id)
 
@@ -624,6 +634,9 @@ def get_current_app(device_id: str | None = None) -> str:
         adb_prefix + ["shell", "dumpsys", "window"], capture_output=True, text=True
     )
     output = result.stdout
+
+    # Import apps module for package name lookup
+    from deepagents_cli.middleware.autoglm import apps
 
     # Parse window focus info
     for line in output.split("\n"):
@@ -634,9 +647,16 @@ def get_current_app(device_id: str | None = None) -> str:
                 if "/" in part and "}" in part:
                     # Extract package from pattern like "com.example.app/.MainActivity}"
                     package = part.split("/")[0].split("{")[-1]
+
+                    # Convert package name to user-friendly app name
+                    app_name = apps.get_app_name(package)
+                    if app_name:
+                        return app_name  # Return "微信" instead of "com.tencent.mm"
+
+                    # If package not found in mapping, return package name as fallback
                     return package
 
-    return ""
+    return "System Home"
 
 
 # Helper Functions
@@ -654,3 +674,7 @@ def _get_adb_prefix(device_id: str | None) -> list[str]:
     if device_id:
         return ["adb", "-s", device_id]
     return ["adb"]
+
+
+# Compatibility alias for original function name
+detect_and_set_adb_keyboard = set_adb_keyboard

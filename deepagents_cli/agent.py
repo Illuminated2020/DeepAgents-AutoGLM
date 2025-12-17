@@ -2,6 +2,7 @@
 
 import os
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 from deepagents import create_deep_agent
@@ -104,12 +105,25 @@ def get_system_prompt(assistant_id: str, sandbox_type: str | None = None) -> str
     """
     agent_dir_path = f"~/.deepagents/{assistant_id}"
 
+    # Get current time information
+    now = datetime.now()
+    current_time = now.strftime("%Y-%m-%d %H:%M:%S")
+    current_date = now.strftime("%Y-%m-%d, %A")
+    current_year = now.year
+
     if sandbox_type:
         # Get provider-specific working directory
 
         working_dir = get_default_working_dir(sandbox_type)
 
-        working_dir_section = f"""### Current Working Directory
+        working_dir_section = f"""<env>
+Working directory: {working_dir}
+Current time: {current_time}
+Current date: {current_date}
+Current year: {current_year}
+</env>
+
+### Current Working Directory
 
 You are operating in a **remote Linux sandbox** at `{working_dir}`.
 
@@ -124,6 +138,9 @@ All code execution and file operations happen in this sandbox environment.
         cwd = Path.cwd()
         working_dir_section = f"""<env>
 Working directory: {cwd}
+Current time: {current_time}
+Current date: {current_date}
+Current year: {current_year}
 </env>
 
 ### Current Working Directory

@@ -16,9 +16,12 @@ Features:
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import os
+import signal
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -135,6 +138,10 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         else:
             self.system_prompt = prompts.get_phone_agent_prompt_zh()
 
+        # Interrupt handling
+        self._interrupt_flag = threading.Event()
+        self._original_ime = None  # Track original keyboard for cleanup
+
         # Build tool list
         self.tools = []
         self._define_tools()
@@ -156,6 +163,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         Raises:
             RuntimeError: If ADB is not available or no devices are connected.
         """
+        # Setup signal handler for Ctrl+C
+        self._setup_signal_handler()
+
         # Check ADB availability
         if not adb_controller.check_adb_available():
             msg = (
@@ -187,6 +197,31 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             )
 
         return request
+
+    def _setup_signal_handler(self) -> None:
+        """Setup signal handler for graceful interruption.
+
+        This allows the phone_task to be interrupted with Ctrl+C and clean up properly.
+        """
+
+        def signal_handler(signum: int, frame: Any) -> None:
+            """Handle interrupt signal by setting the interrupt flag."""
+            # signum and frame are required by signal.signal but not used
+            _ = (signum, frame)
+
+            # Provide immediate feedback to user
+            print("\n" + "="*60)
+            print("⚠️  INTERRUPT SIGNAL RECEIVED (Ctrl+C)")
+            print("="*60)
+            print("Cancelling task... Please wait for current operation to complete.")
+            print("(This may take a few seconds if waiting for model response)")
+            print("="*60 + "\n")
+
+            # Set the interrupt flag
+            self._interrupt_flag.set()
+
+        # Register signal handler for SIGINT (Ctrl+C)
+        signal.signal(signal.SIGINT, signal_handler)
 
     def _define_tools(self) -> None:
         """Define tools that will be added to the agent."""
@@ -237,11 +272,27 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         return phone_task_tool
 
     def _execute_phone_task(self, task: str, tool_call_id: str | None) -> ToolMessage | str:
-        """Execute a phone automation task.
+        """Execute a phone automation task (async wrapper).
 
-        This implements the autonomous agent loop:
+        This wraps the async implementation to provide a synchronous interface
+        for the tool system.
+
+        Args:
+            task: Task description from user.
+            tool_call_id: Tool call ID for creating ToolMessage.
+
+        Returns:
+            ToolMessage with task result.
+        """
+        # Run the async implementation
+        return asyncio.run(self._execute_phone_task_async(task, tool_call_id))
+
+    async def _execute_phone_task_async(self, task: str, tool_call_id: str | None) -> ToolMessage | str:
+        """Execute a phone automation task asynchronously.
+
+        This implements the autonomous agent loop with interruptible model calls:
         1. Take screenshot
-        2. Send to vision model with task description
+        2. Send to vision model with task description (interruptible)
         3. Parse model response to get action
         4. Execute action via ADB
         5. Repeat until task complete or max_steps reached
@@ -258,6 +309,10 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             print(f"Starting phone task: {task}")
             print(f"{'='*60}\n")
 
+        # Reset interrupt flag at start of new task
+        self._interrupt_flag.clear()
+        self._original_ime = None
+
         # Initialize conversation history
         messages = [
             {"role": "system", "content": self.system_prompt},
@@ -269,13 +324,52 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
 
         try:
             while step < self.config.max_steps:
+                # Check for interrupt signal
+                if self._interrupt_flag.is_set():
+                    if self.config.verbose:
+                        print(f"\n{'='*60}")
+                        print(f"⚠️  Task Interrupted by User")
+                        print(f"Stopped at step: {step}/{self.config.max_steps}")
+                        print(f"{'='*60}\n")
+                    self._cleanup_resources()
+                    return ToolMessage(
+                        content=f"Phone task interrupted by user at step {step}. Task was cancelled.",
+                        tool_call_id=tool_call_id,
+                        name="phone_task",
+                        status="error",
+                    )
+
                 step += 1
 
                 if self.config.verbose:
                     print(f"\n--- Step {step}/{self.config.max_steps} ---")
 
+                # Check interrupt before expensive operations
+                if self._interrupt_flag.is_set():
+                    if self.config.verbose:
+                        print("\n[Interrupt detected before screenshot]")
+                    self._cleanup_resources()
+                    return ToolMessage(
+                        content=f"Phone task interrupted by user at step {step}. Task was cancelled.",
+                        tool_call_id=tool_call_id,
+                        name="phone_task",
+                        status="error",
+                    )
+
                 # Take screenshot
                 screenshot = adb_controller.take_screenshot(self.config.device_id)
+
+                # Check interrupt after screenshot
+                if self._interrupt_flag.is_set():
+                    if self.config.verbose:
+                        print("\n[Interrupt detected after screenshot]")
+                    self._cleanup_resources()
+                    return ToolMessage(
+                        content=f"Phone task interrupted by user at step {step}. Task was cancelled.",
+                        tool_call_id=tool_call_id,
+                        name="phone_task",
+                        status="error",
+                    )
 
                 # Get current app for context
                 current_app = adb_controller.get_current_app(self.config.device_id)
@@ -316,9 +410,72 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 user_message = {"role": "user", "content": content}
                 messages.append(user_message)
 
-                # Call vision model
-                response = self.config.vision_model.invoke(messages)
-                response_text = response.content
+                # Check interrupt before expensive model call
+                if self._interrupt_flag.is_set():
+                    if self.config.verbose:
+                        print("\n[Interrupt detected before model call]")
+                    self._cleanup_resources()
+                    return ToolMessage(
+                        content=f"Phone task interrupted by user at step {step}. Task was cancelled.",
+                        tool_call_id=tool_call_id,
+                        name="phone_task",
+                        status="error",
+                    )
+
+                # Call vision model asynchronously with interrupt checking
+                if self.config.verbose:
+                    print("Calling vision model... (Press Ctrl+C to cancel)")
+
+                # Create async task for model call
+                model_task = asyncio.create_task(
+                    self.config.vision_model.ainvoke(messages)
+                )
+
+                # Wait for model response while checking interrupt flag
+                response = None
+                try:
+                    while not model_task.done():
+                        # Check interrupt every 0.1 seconds
+                        if self._interrupt_flag.is_set():
+                            if self.config.verbose:
+                                print("\n[Interrupt detected during model call - cancelling]")
+                            model_task.cancel()
+                            self._cleanup_resources()
+                            return ToolMessage(
+                                content=f"Phone task interrupted by user at step {step} during model call. Task was cancelled.",
+                                tool_call_id=tool_call_id,
+                                name="phone_task",
+                                status="error",
+                            )
+                        # Wait a short time before checking again
+                        await asyncio.sleep(0.1)
+
+                    # Get the result
+                    response = await model_task
+                    response_text = response.content
+
+                except asyncio.CancelledError:
+                    if self.config.verbose:
+                        print("\n[Model call cancelled successfully]")
+                    self._cleanup_resources()
+                    return ToolMessage(
+                        content=f"Phone task interrupted by user at step {step}. Model call was cancelled.",
+                        tool_call_id=tool_call_id,
+                        name="phone_task",
+                        status="error",
+                    )
+
+                # Check interrupt immediately after model returns
+                if self._interrupt_flag.is_set():
+                    if self.config.verbose:
+                        print("\n[Interrupt detected after model call]")
+                    self._cleanup_resources()
+                    return ToolMessage(
+                        content=f"Phone task interrupted by user at step {step}. Task was cancelled.",
+                        tool_call_id=tool_call_id,
+                        name="phone_task",
+                        status="error",
+                    )
 
                 if self.config.verbose:
                     print(f"Model response: {response_text[:200]}...")
@@ -358,6 +515,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                         print(f"Message: {finish_message}")
                         print(f"Total steps: {step}/{self.config.max_steps}")
                         print(f"{'='*60}\n")
+                    self._cleanup_resources()
                     return ToolMessage(
                         content=f"Phone task completed successfully. {finish_message}",
                         tool_call_id=tool_call_id,
@@ -374,6 +532,18 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 # Execute action
                 action_result = self._execute_action(action, screenshot.width, screenshot.height)
 
+                # Check interrupt after action execution
+                if self._interrupt_flag.is_set():
+                    if self.config.verbose:
+                        print("\n[Interrupt detected after action execution]")
+                    self._cleanup_resources()
+                    return ToolMessage(
+                        content=f"Phone task interrupted by user at step {step}. Task was cancelled.",
+                        tool_call_id=tool_call_id,
+                        name="phone_task",
+                        status="error",
+                    )
+
                 if self.config.verbose:
                     print(f"Action result: {action_result}")
 
@@ -387,8 +557,11 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                         {"role": "user", "content": f"Action failed: {action_result['message']}"}
                     )
 
-                # Small delay between actions
-                time.sleep(0.5)
+                # Small delay between actions (check interrupt during sleep)
+                for _ in range(5):  # Split 0.5s into 5x 0.1s for responsive interrupt
+                    if self._interrupt_flag.is_set():
+                        break
+                    await asyncio.sleep(0.1)
 
             # Max steps reached
             if self.config.verbose:
@@ -397,8 +570,24 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 print(f"Reached maximum steps: {self.config.max_steps}")
                 print(f"Last thinking: {last_thinking}")
                 print(f"{'='*60}\n")
+            self._cleanup_resources()
             return ToolMessage(
                 content=f"Phone task incomplete. Reached maximum steps ({self.config.max_steps}). The task did not finish within the step limit. Last status: {last_thinking}",
+                tool_call_id=tool_call_id,
+                name="phone_task",
+                status="error",
+            )
+
+        except KeyboardInterrupt:
+            # Handle Ctrl+C gracefully
+            if self.config.verbose:
+                print(f"\n{'='*60}")
+                print(f"⚠️  Task Interrupted by Ctrl+C")
+                print(f"Cleaning up resources...")
+                print(f"{'='*60}\n")
+            self._cleanup_resources()
+            return ToolMessage(
+                content=f"Phone task interrupted by user (Ctrl+C) at step {step}. Resources cleaned up.",
                 tool_call_id=tool_call_id,
                 name="phone_task",
                 status="error",
@@ -411,12 +600,35 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
 
                 print(f"\n{error_msg}")
                 traceback.print_exc()
+            self._cleanup_resources()
             return ToolMessage(
                 content=f"✗ {error_msg}",
                 tool_call_id=tool_call_id,
                 name="phone_task",
                 status="error",
             )
+
+        finally:
+            # Ensure cleanup always runs
+            self._cleanup_resources()
+
+    def _cleanup_resources(self) -> None:
+        """Clean up resources after task completion or interruption.
+
+        This ensures:
+        - Keyboard is restored to original IME if it was changed
+        - Resources are properly released
+        """
+        try:
+            # Restore keyboard if it was changed
+            if self._original_ime and self.config.device_id:
+                if self.config.verbose:
+                    print("Restoring original keyboard...")
+                adb_controller.restore_keyboard(self._original_ime, self.config.device_id)
+                self._original_ime = None
+        except Exception as e:
+            if self.config.verbose:
+                print(f"Warning: Failed to restore keyboard: {e}")
 
     def _execute_action(
         self, action: dict[str, Any], screen_width: int, screen_height: int
@@ -439,10 +651,8 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 app_name = action.get("app")
                 if not app_name:
                     return {"success": False, "message": "No app name provided"}
-                package_name = apps.find_package_name(app_name)
-                if not package_name:
-                    return {"success": False, "message": f"Unknown app: {app_name}"}
-                success = adb_controller.launch_app(package_name, device_id)
+                # launch_app now accepts app_name directly and handles conversion internally
+                success = adb_controller.launch_app(app_name, device_id)
                 if success:
                     return {"success": True, "message": f"Launched {app_name}"}
                 return {"success": False, "message": f"Failed to launch {app_name}"}
@@ -460,29 +670,38 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 elif action_name == "Double Tap":
                     adb_controller.double_tap(x, y, device_id)
                 else:  # Long Press
-                    adb_controller.long_press(x, y, 1000, device_id)  # 1 second press
+                    adb_controller.long_press(x, y, 3000, device_id)  # 3 seconds (match original)
 
                 return {"success": True, "message": f"Executed {action_name} at ({x}, {y})"}
 
             if action_name in ["Type", "Type_Name"]:
                 text = action.get("text", "")
-                
-                # Switch to ADB keyboard
-                original_ime = adb_controller.set_adb_keyboard(device_id)
-                time.sleep(0.5)  # keyboard_switch_delay
-                
-                # Clear existing text and type new text
-                adb_controller.clear_text(device_id)
-                time.sleep(0.2)  # text_clear_delay
-                
-                adb_controller.type_text(text, device_id)
-                time.sleep(0.3)  # text_input_delay
-                
-                # Restore original keyboard
-                adb_controller.restore_keyboard(original_ime, device_id)
-                time.sleep(0.5)  # keyboard_restore_delay
-                
-                return {"success": True, "message": f"Typed: {text}"}
+
+                try:
+                    # Switch to ADB keyboard and save original IME for cleanup
+                    original_ime = adb_controller.set_adb_keyboard(device_id)
+                    self._original_ime = original_ime  # Track for cleanup on interrupt
+                    time.sleep(0.5)  # keyboard_switch_delay
+
+                    # Clear existing text and type new text
+                    adb_controller.clear_text(device_id)
+                    time.sleep(0.2)  # text_clear_delay
+
+                    adb_controller.type_text(text, device_id)
+                    time.sleep(0.3)  # text_input_delay
+
+                    return {"success": True, "message": f"Typed: {text}"}
+
+                finally:
+                    # Always restore keyboard, even if interrupted
+                    try:
+                        if self._original_ime:
+                            adb_controller.restore_keyboard(self._original_ime, device_id)
+                            time.sleep(0.5)  # keyboard_restore_delay
+                            self._original_ime = None  # Clear after restoration
+                    except Exception as e:
+                        if self.config.verbose:
+                            print(f"Warning: Failed to restore keyboard in Type action: {e}")
 
             if action_name == "Swipe":
                 start = action.get("start")
@@ -495,7 +714,8 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 end_x = int(end[0] / 1000 * screen_width)
                 end_y = int(end[1] / 1000 * screen_height)
 
-                adb_controller.swipe(start_x, start_y, end_x, end_y, 300, device_id)
+                # Use None for duration to auto-calculate based on distance (1000-2000ms range)
+                adb_controller.swipe(start_x, start_y, end_x, end_y, None, device_id)
                 return {"success": True, "message": "Executed swipe"}
 
             if action_name == "Back":
