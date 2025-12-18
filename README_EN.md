@@ -95,16 +95,80 @@ uv pip install -e ".[autoglm]"
 ```
 
 **Install ADB tools:**
+
+- **macOS:**
+  ```bash
+  brew install android-platform-tools
+  ```
+
+- **Ubuntu/Debian:**
+  ```bash
+  sudo apt-get install android-tools-adb
+  ```
+
+- **Windows:**
+  1. Download platform-tools from [official website](https://developer.android.com/tools/releases/platform-tools)
+  2. Extract to a custom path (e.g., `C:\platform-tools`)
+  3. Configure environment variables:
+     - Right-click `This PC` → `Properties` → `Advanced system settings` → `Environment Variables`
+     - Find `Path` in `System variables`, click `Edit`
+     - Click `New`, add the full path to platform-tools (e.g., `C:\platform-tools`)
+     - Click `OK` to save
+
+**Verify ADB installation:**
 ```bash
-# macOS
-brew install android-platform-tools
-
-# Ubuntu/Debian
-sudo apt-get install android-tools-adb
-
-# Windows
-# Download from https://developer.android.com/studio/releases/platform-tools
+adb version
+# Should output version information
 ```
+
+**Configure Android Device (Android 7.0+):**
+
+1. **Enable Developer Mode:**
+   - Go to `Settings` → `About phone` → Find `Build number`
+   - Tap `Build number` 7-10 times continuously
+   - You should see "You are now a developer" or "Developer mode enabled" message
+
+2. **Enable USB Debugging:**
+   - Go to `Settings` → `Developer options`
+   - Enable `USB debugging`
+   - **Important**: Some devices also need to enable `USB debugging (Security settings)` for tap operations to work properly
+
+3. **Connect device and verify:**
+   ```bash
+   # Use a data-capable USB cable (not charging-only cable)
+   adb devices
+
+   # Should display device list:
+   # List of devices attached
+   # XXXXXXXX    device
+   ```
+
+   **Common issues:**
+   - Showing `unauthorized`: Tap "Allow USB debugging" authorization popup on your phone
+   - Device not showing: Check if USB debugging is enabled, try different cable or USB port
+   - Some devices may require a restart to take effect
+
+4. **Install ADB Keyboard (for text input):**
+
+   Download [ADBKeyboard.apk](https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk) and install:
+
+   ```bash
+   # Method 1: Install via ADB (execute on computer)
+   wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
+   adb install -r ADBKeyboard.apk
+
+   # Method 2: Download and install APK directly on your phone
+   ```
+
+   **Enable ADB Keyboard:**
+   - Method 1: Enable manually on your phone
+     - Go to `Settings` → `Language and input` → `Virtual keyboard` or `Keyboard list`
+     - Find and enable `ADB Keyboard`
+
+   - Method 2: Enable via command (execute on computer)
+     ```bash
+     adb shell ime enable com.android.adbkeyboard/.AdbIME
+     ```
 
 **Configure environment variables:**
 
@@ -153,6 +217,29 @@ AUTOGLM_VISION_MODEL_URL=https://open.bigmodel.cn/api/paas/v4
 AUTOGLM_VISION_MODEL_NAME=autoglm-phone
 AUTOGLM_VISION_API_KEY=your-zhipu-api-key
 ```
+
+**Using Third-party Model Services (Recommended):**
+
+If you don't want to deploy models locally, you can use the following third-party services:
+
+1. **Zhipu BigModel**
+   - Documentation: https://docs.bigmodel.cn/cn/api/introduction
+   - `AUTOGLM_VISION_MODEL_URL`: `https://open.bigmodel.cn/api/paas/v4`
+   - `AUTOGLM_VISION_MODEL_NAME`: `autoglm-phone`
+   - `AUTOGLM_VISION_API_KEY`: Apply for API Key on Zhipu platform
+
+2. **ModelScope**
+   - Documentation: https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B
+   - `AUTOGLM_VISION_MODEL_URL`: `https://api-inference.modelscope.cn/v1`
+   - `AUTOGLM_VISION_MODEL_NAME`: `ZhipuAI/AutoGLM-Phone-9B`
+   - `AUTOGLM_VISION_API_KEY`: Apply for API Key on ModelScope platform
+
+**Model Information:**
+
+| Model | Download Links | Description |
+|-------|----------------|-------------|
+| AutoGLM-Phone-9B | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B) | Optimized for Chinese phone applications |
+| AutoGLM-Phone-9B-Multilingual | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B-Multilingual)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B-Multilingual) | Supports English and other multilingual scenarios |
 
 ## Built-in Tools
 
@@ -425,26 +512,58 @@ AUTOGLM_VERBOSE=false
 adb devices
 ```
 
-**WiFi Connection:**
+**WiFi Connection (No USB cable required):**
 
-Wireless debugging (Android 11+, recommended)
+For Android 11+ wireless debugging:
+
 ```bash
-# 1. Enable wireless debugging on device
-#    Settings → Developer options → Wireless debugging → Enable
+# 1. Enable wireless debugging on your phone
+#    Ensure phone and computer are on the same WiFi network
+#    Go to: Settings → Developer options → Wireless debugging → Enable
 #    Tap "Pair device with pairing code"
 
-# 2. Pair device (enter pairing code shown on device)
+# 2. Pair device (execute on computer, enter pairing code shown on phone)
 adb pair <device-IP>:<pairing-port>
-# Example: adb pair 192.168.213.55:46201
-# Enter pairing code: 441750
+# Example: adb pair 192.168.1.100:46201
+# Enter pairing code: 441750  (enter code shown on phone)
 
 # 3. Connect device (use wireless debugging port, not pairing port)
 adb connect <device-IP>:<debug-port>
-# Example: adb connect 192.168.213.55:41589
+# Example: adb connect 192.168.1.100:41589
 
 # 4. Verify connection
 adb devices
+# Should display: 192.168.1.100:41589    device
 ```
+
+**Enable TCP/IP mode via USB (Android 7+):**
+
+If your device doesn't support wireless debugging, you can enable network debugging via USB first:
+
+```bash
+# 1. Connect device via USB
+adb devices
+
+# 2. Enable TCP/IP mode (port 5555)
+adb tcpip 5555
+
+# 3. Get device IP address
+adb shell ip addr show wlan0 | grep 'inet '
+# Or check on phone: Settings → About phone → Status → IP address
+
+# 4. Disconnect USB cable, connect via WiFi
+adb connect <device-IP>:5555
+# Example: adb connect 192.168.1.100:5555
+
+# 5. Verify connection
+adb devices
+```
+
+**Remote connection troubleshooting:**
+
+- **Connection refused**: Ensure device and computer are on the same network, check if firewall blocks port 5555
+- **Connection dropped**: WiFi may have disconnected, use `adb connect <IP>:5555` to reconnect
+- **Not working after device restart**: Some devices disable TCP/IP after restart, need to re-enable via USB
 
 ### Installing ADB Keyboard
 
@@ -476,20 +595,19 @@ Agent: I will use the phone_task tool to open WeChat, find Zhang San's chat, and
 
 ### Supported Apps
 
-AutoGLM has built-in configurations for common apps:
+AutoGLM has built-in configurations for 50+ mainstream apps:
 
-- WeChat (WeChat)
-- Douyin (Douyin)
-- Taobao (Taobao)
-- Meituan (Meituan)
-- Kuaishou (Kuaishou)
-- JD (JD)
-- Alipay (Alipay)
-- Bilibili (Bilibili)
-- Xiaohongshu (Xiaohongshu)
-- Pinduoduo (Pinduoduo)
-
-And system apps (Phone, Messages, Camera, Settings, etc.).
+| Category | Apps |
+|----------|------|
+| Social & Communication | WeChat, QQ, Weibo, DingTalk |
+| E-commerce & Shopping | Taobao, JD, Pinduoduo, Tmall |
+| Food & Delivery | Meituan, Ele.me, KFC, McDonald's |
+| Travel & Transportation | Ctrip, 12306, Didi, Amap, Baidu Maps |
+| Video & Entertainment | Douyin, Kuaishou, Bilibili, iQIYI, Tencent Video |
+| Music & Audio | NetEase Cloud Music, QQ Music, Ximalaya |
+| Life Services | Dianping, Alipay |
+| Content Communities | Xiaohongshu, Zhihu, Douban |
+| System Apps | Phone, Messages, Camera, Settings, Browser |
 
 ## Technical Architecture
 

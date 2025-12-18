@@ -95,16 +95,80 @@ uv pip install -e ".[autoglm]"
 ```
 
 **安装 ADB 工具：**
+
+- **macOS：**
+  ```bash
+  brew install android-platform-tools
+  ```
+
+- **Ubuntu/Debian：**
+  ```bash
+  sudo apt-get install android-tools-adb
+  ```
+
+- **Windows：**
+  1. 从 [官方网站](https://developer.android.com/tools/releases/platform-tools) 下载 platform-tools
+  2. 解压到自定义路径（如 `C:\platform-tools`）
+  3. 配置环境变量：
+     - 右键 `此电脑` → `属性` → `高级系统设置` → `环境变量`
+     - 在 `系统变量` 中找到 `Path`，点击 `编辑`
+     - 点击 `新建`，添加 platform-tools 的完整路径（如 `C:\platform-tools`）
+     - 点击 `确定` 保存
+
+**验证 ADB 安装：**
 ```bash
-# macOS
-brew install android-platform-tools
-
-# Ubuntu/Debian
-sudo apt-get install android-tools-adb
-
-# Windows
-# 从 https://developer.android.com/studio/releases/platform-tools 下载
+adb version
+# 应输出版本信息
 ```
+
+**配置 Android 设备（Android 7.0+）：**
+
+1. **启用开发者模式：**
+   - 进入 `设置` → `关于手机` → 找到 `版本号`
+   - 连续快速点击 `版本号` 7-10 次
+   - 看到"您已处于开发者模式"或"开发者模式已启用"提示
+
+2. **启用 USB 调试：**
+   - 进入 `设置` → `开发者选项`
+   - 启用 `USB 调试`
+   - **重要**：部分机型还需启用 `USB 调试(安全设置)` 才能正常执行点击操作
+
+3. **连接设备并验证：**
+   ```bash
+   # 使用支持数据传输的 USB 数据线连接设备（非仅充电线）
+   adb devices
+
+   # 应显示设备列表：
+   # List of devices attached
+   # XXXXXXXX    device
+   ```
+
+   **常见问题：**
+   - 显示 `unauthorized`：在手机上点击"允许 USB 调试"授权弹窗
+   - 设备未显示：检查 USB 调试是否启用，尝试更换数据线或 USB 接口
+   - 部分机型可能需要重启设备才能生效
+
+4. **安装 ADB Keyboard（用于文本输入）：**
+
+   下载 [ADBKeyboard.apk](https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk) 并安装：
+
+   ```bash
+   # 方式 1：通过 ADB 安装（电脑端执行）
+   wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
+   adb install -r ADBKeyboard.apk
+
+   # 方式 2：直接在手机上下载安装 APK 文件
+   ```
+
+   **启用 ADB Keyboard：**
+   - 方式 1：在手机上手动启用
+     - 进入 `设置` → `语言和输入法` → `虚拟键盘` 或 `键盘列表`
+     - 找到并启用 `ADB Keyboard`
+
+   - 方式 2：通过命令启用（电脑端执行）
+     ```bash
+     adb shell ime enable com.android.adbkeyboard/.AdbIME
+     ```
 
 **配置环境变量：**
 
@@ -152,7 +216,30 @@ python3 -m vllm.entrypoints.openai.api_server \
 AUTOGLM_VISION_MODEL_URL=https://open.bigmodel.cn/api/paas/v4
 AUTOGLM_VISION_MODEL_NAME=autoglm-phone
 AUTOGLM_VISION_API_KEY=your-zhipu-api-key
-``` 
+```
+
+**使用第三方模型服务（推荐）：**
+
+如果不想本地部署模型，可以使用以下已部署的第三方服务：
+
+1. **智谱 BigModel**
+   - 文档：https://docs.bigmodel.cn/cn/api/introduction
+   - `AUTOGLM_VISION_MODEL_URL`: `https://open.bigmodel.cn/api/paas/v4`
+   - `AUTOGLM_VISION_MODEL_NAME`: `autoglm-phone`
+   - `AUTOGLM_VISION_API_KEY`: 在智谱平台申请 API Key
+
+2. **ModelScope（魔搭社区）**
+   - 文档：https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B
+   - `AUTOGLM_VISION_MODEL_URL`: `https://api-inference.modelscope.cn/v1`
+   - `AUTOGLM_VISION_MODEL_NAME`: `ZhipuAI/AutoGLM-Phone-9B`
+   - `AUTOGLM_VISION_API_KEY`: 在 ModelScope 平台申请 API Key
+
+**模型信息：**
+
+| 模型 | 下载链接 | 说明 |
+|------|---------|------|
+| AutoGLM-Phone-9B | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B) | 针对中文手机应用优化 |
+| AutoGLM-Phone-9B-Multilingual | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B-Multilingual)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B-Multilingual) | 支持英语等多语言场景 |
 
 ## 内置工具
 
@@ -425,26 +512,58 @@ AUTOGLM_VERBOSE=false
 adb devices
 ```
 
-**WiFi 连接：**
+**WiFi 连接（无需 USB 线）：**
 
-无线调试（Android 11+，推荐）
+适用于 Android 11+ 的无线调试功能：
+
 ```bash
-# 1. 在设备上启用无线调试
-#    设置 → 开发者选项 → 无线调试 → 启用
+# 1. 在手机上启用无线调试
+#    确保手机和电脑在同一个 WiFi 网络
+#    进入：设置 → 开发者选项 → 无线调试 → 启用
 #    点击"使用配对码配对设备"
 
-# 2. 配对设备（输入设备上显示的配对码）
+# 2. 配对设备（在电脑上执行，输入手机上显示的配对码）
 adb pair <设备IP>:<配对端口>
-# 示例: adb pair 192.168.213.55:46201
-# Enter pairing code: 441750
+# 示例: adb pair 192.168.1.100:46201
+# Enter pairing code: 441750  （输入手机上显示的配对码）
 
-# 3. 连接设备（使用无线调试端口，不是配对端口）
+# 3. 连接设备（使用无线调试端口，注意不是配对端口）
 adb connect <设备IP>:<调试端口>
-# 示例: adb connect 192.168.213.55:41589
+# 示例: adb connect 192.168.1.100:41589
 
 # 4. 验证连接
 adb devices
+# 应显示: 192.168.1.100:41589    device
 ```
+
+**通过 USB 启用 TCP/IP 模式（Android 7+）：**
+
+如果设备不支持无线调试，可以先通过 USB 启用网络调试：
+
+```bash
+# 1. 通过 USB 连接设备
+adb devices
+
+# 2. 启用 TCP/IP 模式（5555 端口）
+adb tcpip 5555
+
+# 3. 获取设备 IP 地址
+adb shell ip addr show wlan0 | grep 'inet '
+# 或在手机上查看：设置 → 关于手机 → 状态信息 → IP 地址
+
+# 4. 拔掉 USB 线，通过 WiFi 连接
+adb connect <设备IP>:5555
+# 示例: adb connect 192.168.1.100:5555
+
+# 5. 验证连接
+adb devices
+```
+
+**远程连接问题排查：**
+
+- **连接被拒绝**：确保设备和电脑在同一网络，检查防火墙是否阻止 5555 端口
+- **连接断开**：WiFi 可能断开，使用 `adb connect <IP>:5555` 重新连接
+- **设备重启后失效**：部分设备重启后会禁用 TCP/IP，需通过 USB 重新启用
 
 ### 安装 ADB Keyboard
 
@@ -476,20 +595,19 @@ Agent：我将使用 phone_task 工具打开微信、找到张三的聊天并发
 
 ### 支持的应用
 
-AutoGLM 内置了常用应用配置：
+AutoGLM 内置了 50+ 款主流应用配置：
 
-- 微信 (WeChat)
-- 抖音 (Douyin)
-- 淘宝 (Taobao)
-- 美团 (Meituan)
-- 快手 (Kuaishou)
-- 京东 (JD)
-- 支付宝 (Alipay)
-- 哔哩哔哩 (Bilibili)
-- 小红书 (Xiaohongshu)
-- 拼多多 (Pinduoduo)
-
-以及系统应用（电话、短信、相机、设置等）。
+| 分类 | 应用 |
+|------|------|
+| 社交通讯 | 微信、QQ、微博、钉钉 |
+| 电商购物 | 淘宝、京东、拼多多、天猫 |
+| 美食外卖 | 美团、饿了么、肯德基、麦当劳 |
+| 出行旅游 | 携程、12306、滴滴出行、高德地图、百度地图 |
+| 视频娱乐 | 抖音、快手、bilibili、爱奇艺、腾讯视频 |
+| 音乐音频 | 网易云音乐、QQ音乐、喜马拉雅 |
+| 生活服务 | 大众点评、支付宝 |
+| 内容社区 | 小红书、知乎、豆瓣 |
+| 系统应用 | 电话、短信、相机、设置、浏览器 |
 
 ## 技术架构
 

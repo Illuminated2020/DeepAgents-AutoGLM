@@ -123,6 +123,13 @@ Current date: {current_date}
 Current year: {current_year}
 </env>
 
+**IMPORTANT - Current Date Awareness:**
+Today is {current_date} ({current_year}). When searching for information, making references to "this year", "recent events", or time-sensitive data:
+- Use {current_year} as the current year in your searches
+- "This year" or "今年" means {current_year}
+- Recent events should reference {current_year}, not previous years
+- Example: If asked about "this year's events", search for "{current_year} events", not "{current_year - 1} events"
+
 ### Current Working Directory
 
 You are operating in a **remote Linux sandbox** at `{working_dir}`.
@@ -142,6 +149,13 @@ Current time: {current_time}
 Current date: {current_date}
 Current year: {current_year}
 </env>
+
+**IMPORTANT - Current Date Awareness:**
+Today is {current_date} ({current_year}). When searching for information, making references to "this year", "recent events", or time-sensitive data:
+- Use {current_year} as the current year in your searches
+- "This year" or "今年" means {current_year}
+- Recent events should reference {current_year}, not previous years
+- Example: If asked about "this year's events", search for "{current_year} events", not "{current_year - 1} events"
 
 ### Current Working Directory
 
