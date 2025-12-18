@@ -151,23 +151,32 @@ def parse_action(action_str: str) -> dict[str, Any]:
 
         # Handle finish(...) actions
         if action_str.startswith("finish("):
-            # Extract message using regex
-            message_match = re.search(r'finish\(message="([^"]*)"\)', action_str)
-            if message_match:
-                message = message_match.group(1)
+            # Strategy 1: Find ") at the end - handles messages with internal quotes
+            # Look for finish(message="...") where ... can contain any characters including "
+            # We find the LAST occurrence of ") to handle nested quotes
+            if 'message="' in action_str:
+                start_idx = action_str.index('message="') + len('message="')
+                # Find the last ") in the string
+                if '")' in action_str[start_idx:]:
+                    end_idx = action_str.rindex('")')
+                    message = action_str[start_idx:end_idx]
+                    return {"_metadata": "finish", "message": message}
+
+            # Strategy 2: Try single quotes
+            if "message='" in action_str:
+                start_idx = action_str.index("message='") + len("message='")
+                if "')" in action_str[start_idx:]:
+                    end_idx = action_str.rindex("')")
+                    message = action_str[start_idx:end_idx]
+                    return {"_metadata": "finish", "message": message}
+
+            # Strategy 3: Fallback - extract everything after message= and clean it up
+            if "message=" in action_str:
+                message_raw = action_str.split("message=", 1)[1].strip()
+                # Remove surrounding quotes and trailing )
+                message = message_raw.strip('"').strip("'").rstrip(")")
                 return {"_metadata": "finish", "message": message}
-            # Try single quotes
-            message_match = re.search(r"finish\(message='([^']*)'\)", action_str)
-            if message_match:
-                message = message_match.group(1)
-                return {"_metadata": "finish", "message": message}
-            # Fallback: extract everything between message= and closing )
-            message_match = re.search(r"finish\(message=(.+)\)", action_str)
-            if message_match:
-                message_raw = message_match.group(1).strip()
-                # Remove quotes if present
-                message = message_raw.strip('"').strip("'")
-                return {"_metadata": "finish", "message": message}
+
             msg = "finish action missing message parameter"
             raise ValueError(msg)
 

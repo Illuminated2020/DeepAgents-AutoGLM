@@ -25,6 +25,7 @@ from deepagents_cli.integrations.sandbox_factory import (
     get_default_working_dir,
 )
 from deepagents_cli.skills import execute_skills_command, setup_skills_parser
+from deepagents_cli.middleware.autoglm_middleware import ForceExitException
 from deepagents_cli.tools import fetch_url, http_request, web_search
 from deepagents_cli.ui import TokenTracker, show_help
 
@@ -372,6 +373,11 @@ async def main(
             console.print("[red]❌ Sandbox creation failed[/red]")
             console.print(f"[dim]{e}[/dim]")
             sys.exit(1)
+        except ForceExitException:
+            # User forced exit with second Ctrl+C - comprehensive cleanup already done
+            console.print("\n[green]✓ Cleanup completed[/green]")
+            console.print("[yellow]Goodbye![/yellow]\n")
+            sys.exit(0)
         except KeyboardInterrupt:
             console.print("\n\n[yellow]Interrupted[/yellow]")
             sys.exit(0)
@@ -384,6 +390,11 @@ async def main(
     else:
         try:
             await _run_agent_session(model, assistant_id, session_state, sandbox_backend=None)
+        except ForceExitException:
+            # User forced exit with second Ctrl+C - comprehensive cleanup already done
+            console.print("\n[green]✓ Cleanup completed[/green]")
+            console.print("[yellow]Goodbye![/yellow]\n")
+            sys.exit(0)
         except KeyboardInterrupt:
             console.print("\n\n[yellow]Interrupted[/yellow]")
             sys.exit(0)
