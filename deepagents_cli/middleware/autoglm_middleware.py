@@ -23,17 +23,61 @@ import signal
 import tempfile
 import threading
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from langchain.agents.middleware.types import AgentMiddleware, AgentState, ModelRequest
+from langchain.agents.middleware.types import AgentMiddleware, AgentState, ModelRequest, ModelResponse
 from langchain.tools import ToolRuntime, tool
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.types import Command
 
 from deepagents_cli.middleware.autoglm import action_parser, adb_controller, apps, prompts
+
+
+# AutoGLM Phone Task Usage Guide
+AUTOGLM_SYSTEM_PROMPT = """
+
+## Phone Control Tool Usage (phone_task)
+
+**Important - Tool Responsibility Division:**
+
+YOU (Main Agent):
+- Task planning & decomposition
+- Web search & information gathering
+- Complex analysis & decision making
+- Orchestrating multiple phone_task calls
+
+phone_task (Phone Operator):
+- Execute phone operations (tap, swipe, type, open apps)
+- Multi-step UI navigation on the phone
+- Read & return screen content
+- Cannot do web searches or complex reasoning
+
+**Usage Patterns:**
+
+1. **Information Retrieval:** phone_task reads → you analyze → phone_task acts
+   ```
+   phone_task("Check WeChat messages from Alice") → "Alice asks: weather tomorrow?"
+   web_search("weather tomorrow") → "Sunny, 20-25°C"
+   phone_task("Reply to Alice: 'Sunny, 20-25°C'") → Done
+   ```
+
+2. **Operation with Data:** You provide complete data
+   ```
+   phone_task("Send WeChat message to Bob: 'Meeting at 3pm'")
+   ```
+
+3. **Task Decomposition:** Break complex tasks into simple phone operations
+   ```
+   ✗ Don't: phone_task("Answer Alice's question")
+   ✓ Do: Get question → You find answer → Send answer
+   ```
+
+**Key Principle:** If it requires external knowledge or complex reasoning, YOU do it first, then give phone_task specific instructions.
+"""
 
 
 class ForceExitException(Exception):
@@ -308,28 +352,52 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             task: str,
             runtime: ToolRuntime[None, AgentState],
         ) -> ToolMessage | str:
-            """Execute a task on the connected Android phone using autonomous GUI automation.
+            """Execute phone operation tasks on the connected Android device.
 
-            This tool uses a vision-language model to understand the phone screen and
-            perform actions to complete the requested task. It autonomously navigates
-            the UI, taps buttons, enters text, and performs other actions as needed.
+            This tool is a phone operation specialist that handles all phone-related operations
+            using a vision-language model to understand the screen and perform actions.
+
+            IMPORTANT - Tool Responsibility:
+            ✓ DOES: All phone operations (open apps, tap, swipe, type, view content, multi-step workflows)
+            ✗ DOES NOT: Web searches, complex analysis, external knowledge queries
+
+            Best Practices:
+            1. For information retrieval: Ask the tool to get specific information and return it
+               Example: "Open WeChat, find the chat with Alice, and tell me her latest message"
+
+            2. For operations with data: Provide the data/content directly in the task
+               Example: "Open WeChat and send Alice this message: 'The weather is sunny, 20-25°C'"
+
+            3. Break down complex tasks: If a task requires web search or analysis, do that yourself
+               first, then use phone_task with the results
+
+            Anti-patterns (DON'T DO):
+            ✗ "Read Alice's message and answer her question" (tool can't search for answers)
+            ✓ INSTEAD: Use phone_task to read → you search/analyze → use phone_task to reply
+
+            ✗ "Find a good restaurant and book it" (tool can't evaluate "good")
+            ✓ INSTEAD: You find/evaluate restaurants → use phone_task to open app and book
 
             Args:
-                task: Description of the task to perform on the phone.
+                task: Description of the phone operation task to perform.
                       Examples:
-                      - "Open WeChat and send a message to Alice saying 'Hello'"
-                      - "Search for coffee shops near me on the Maps app"
-                      - "Add a reminder for tomorrow at 9 AM to call the dentist"
+                      - "Open WeChat and check if there are any unread messages from Alice"
+                      - "Open WeChat and send Alice this message: 'Hello, how are you?'"
+                      - "Open Maps and search for 'coffee shops near me', tell me the top 3 results"
+                      - "Open Twitter and post this tweet: 'Having a great day!'"
 
             Returns:
-                A message describing the result of the task execution.
+                A message describing the operation result or retrieved information.
 
             Examples:
                 >>> phone_task("Open Settings and turn on WiFi")
-                "Task completed successfully. WiFi has been turned on in Settings."
+                "✅ Task completed. WiFi has been turned on in Settings."
 
-                >>> phone_task("Search for 'sushi' on Meituan")
-                "Task completed. Found 15 sushi restaurants. The top result is..."
+                >>> phone_task("Open WeChat and check Alice's latest message")
+                "✅ Task completed. Alice's latest message: 'What's the weather like tomorrow?'"
+
+                >>> phone_task("Reply to Alice on WeChat: 'It will be sunny, 20-25°C'")
+                "✅ Task completed. Message sent to Alice successfully."
             """
             return self._execute_phone_task(task, runtime.tool_call_id)
 
@@ -999,6 +1067,52 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         ])
 
         return tools
+
+    def wrap_model_call(
+        self,
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse],
+    ) -> ModelResponse:
+        """Inject AutoGLM usage documentation into the system prompt.
+
+        This runs on every model call to ensure phone_task usage guidance is always available.
+
+        Args:
+            request: The model request being processed.
+            handler: The handler function to call with the modified request.
+
+        Returns:
+            The model response from the handler.
+        """
+        # Inject AutoGLM usage documentation into system prompt
+        if request.system_prompt:
+            system_prompt = request.system_prompt + "\n\n" + AUTOGLM_SYSTEM_PROMPT
+        else:
+            system_prompt = AUTOGLM_SYSTEM_PROMPT
+
+        return handler(request.override(system_prompt=system_prompt))
+
+    async def awrap_model_call(
+        self,
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], Awaitable[ModelResponse]],
+    ) -> ModelResponse:
+        """(async) Inject AutoGLM usage documentation into the system prompt.
+
+        Args:
+            request: The model request being processed.
+            handler: The handler function to call with the modified request.
+
+        Returns:
+            The model response from the handler.
+        """
+        # Inject AutoGLM usage documentation into system prompt
+        if request.system_prompt:
+            system_prompt = request.system_prompt + "\n\n" + AUTOGLM_SYSTEM_PROMPT
+        else:
+            system_prompt = AUTOGLM_SYSTEM_PROMPT
+
+        return await handler(request.override(system_prompt=system_prompt))
 
 
 __all__ = ["AutoGLMMiddleware", "AutoGLMConfig"]
