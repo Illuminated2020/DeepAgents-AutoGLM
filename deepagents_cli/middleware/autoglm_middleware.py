@@ -766,10 +766,20 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                     adb_controller.clear_text(device_id)
                     time.sleep(0.5)  # text_clear_delay - increased for stability
 
-                    adb_controller.type_text(text, device_id)
-                    time.sleep(1.0)  # text_input_delay - increased to ensure text is fully processed
+                    # Log text length for debugging
+                    if self.config.verbose:
+                        print(f"[Type Action] Inputting text: {len(text)} characters")
+                        print(f"[Type Action] Text preview: {text[:100]}..." if len(text) > 100 else f"[Type Action] Text: {text}")
 
-                    return {"success": True, "message": f"Typed: {text}"}
+                    adb_controller.type_text(text, device_id, verbose=self.config.verbose)
+
+                    # Increased delay for long text to ensure all chunks are processed
+                    if len(text) > 500:
+                        time.sleep(2.0)  # 2s for long text
+                    else:
+                        time.sleep(1.0)  # 1s for short text
+
+                    return {"success": True, "message": f"Typed: {len(text)} characters"}
 
                 finally:
                     # Always restore keyboard, even if interrupted

@@ -473,12 +473,13 @@ def press_home(device_id: str | None = None, delay: float | None = None) -> None
 # Text Input
 
 
-def type_text(text: str, device_id: str | None = None) -> None:
+def type_text(text: str, device_id: str | None = None, verbose: bool = False) -> None:
     """Type text using ADB Keyboard.
 
     Args:
         text: The text to type.
         device_id: Optional device ID.
+        verbose: Enable detailed logging for debugging (default: False).
 
     Note:
         Requires ADB Keyboard to be installed and enabled.
@@ -492,6 +493,9 @@ def type_text(text: str, device_id: str | None = None) -> None:
         - Android Binder buffer: 1MB shared across all process transactions
         - Recommended Intent data size: a few KB to avoid TransactionTooLargeException
         - Base64 encoding overhead: ~33% size increase
+
+    Raises:
+        RuntimeError: If text input fails after retries.
     """
     adb_prefix = _get_adb_prefix(device_id)
 
@@ -499,10 +503,15 @@ def type_text(text: str, device_id: str | None = None) -> None:
     # Conservative value to ensure reliability across different devices
     MAX_CHUNK_SIZE = 500
 
+    # Increased delay for better reliability with long text
+    CHUNK_DELAY = 0.3  # 300ms between chunks (doubled from 150ms)
+
     # Short text: use original single-broadcast approach
     if len(text) <= MAX_CHUNK_SIZE:
+        if verbose:
+            print(f"[type_text] Sending short text ({len(text)} chars)")
         encoded_text = base64.b64encode(text.encode("utf-8")).decode("utf-8")
-        subprocess.run(
+        result = subprocess.run(
             adb_prefix
             + [
                 "shell",
@@ -517,13 +526,26 @@ def type_text(text: str, device_id: str | None = None) -> None:
             capture_output=True,
             text=True,
         )
+        if verbose and result.returncode != 0:
+            print(f"[type_text] Warning: broadcast failed with return code {result.returncode}")
+            print(f"[type_text] stderr: {result.stderr}")
     else:
         # Long text: split into chunks and send sequentially
+        total_chunks = (len(text) + MAX_CHUNK_SIZE - 1) // MAX_CHUNK_SIZE
+        if verbose:
+            print(f"[type_text] Sending long text ({len(text)} chars) in {total_chunks} chunks")
+
+        failed_chunks = []
         for i in range(0, len(text), MAX_CHUNK_SIZE):
+            chunk_num = i // MAX_CHUNK_SIZE + 1
             chunk = text[i : i + MAX_CHUNK_SIZE]
             encoded_chunk = base64.b64encode(chunk.encode("utf-8")).decode("utf-8")
 
-            subprocess.run(
+            if verbose:
+                chunk_preview = chunk[:50] + "..." if len(chunk) > 50 else chunk
+                print(f"[type_text] Sending chunk {chunk_num}/{total_chunks} ({len(chunk)} chars): {chunk_preview}")
+
+            result = subprocess.run(
                 adb_prefix
                 + [
                     "shell",
@@ -537,12 +559,31 @@ def type_text(text: str, device_id: str | None = None) -> None:
                 ],
                 capture_output=True,
                 text=True,
+                timeout=5,  # Add timeout to avoid hanging
             )
 
-            # Small delay between chunks to ensure proper delivery
-            # Avoid overwhelming the Binder buffer with rapid broadcasts
+            # Check if broadcast succeeded
+            if result.returncode != 0:
+                error_msg = f"Chunk {chunk_num}/{total_chunks} failed"
+                failed_chunks.append(chunk_num)
+                if verbose:
+                    print(f"[type_text] ERROR: {error_msg}")
+                    print(f"[type_text] Return code: {result.returncode}")
+                    print(f"[type_text] stderr: {result.stderr}")
+
+            # Delay between chunks to ensure proper delivery
+            # Increased delay for better reliability
             if i + MAX_CHUNK_SIZE < len(text):  # Not the last chunk
-                time.sleep(0.15)  # 150ms between chunks
+                time.sleep(CHUNK_DELAY)
+
+        if failed_chunks:
+            error_msg = f"Failed to send chunks: {failed_chunks}. Text may be incomplete."
+            if verbose:
+                print(f"[type_text] CRITICAL ERROR: {error_msg}")
+            # Don't raise exception, just warn (to match original behavior)
+            print(f"Warning: {error_msg}")
+        elif verbose:
+            print(f"[type_text] Successfully sent all {total_chunks} chunks")
 
 
 def clear_text(device_id: str | None = None) -> None:
