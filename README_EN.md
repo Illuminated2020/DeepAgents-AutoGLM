@@ -9,7 +9,7 @@ An open-source intelligent programming assistant based on the [deepagents](https
 Compared to the original [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) project, this project brings the following core advantages through **middleware architecture**:
 
 - **🔗 Capability Composition**: AutoGLM seamlessly integrates with Web search, Shell, skills system, and memory system, enabling full automation of "search information → analyze decisions → phone operations"
-- **🧠 Intelligent Division of Labor**: Main Agent handles task planning and complex decision-making, while `phone_task` focuses on phone operation execution with clear responsibility boundaries
+- **🧠 Intelligent Division of Labor**: Main Agent handles task planning and complex decision-making, while sub-Agent `phone_task` focuses on phone operation execution with clear responsibility boundaries
 - **🎯 Unified Entry Point**: All features managed through a single CLI and `.env` configuration file, no need to configure each capability separately
 - **🔌 Modular Extension**: Pluggable design, AutoGLM as an optional middleware, enabled on-demand via environment variables
 
