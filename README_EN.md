@@ -12,7 +12,7 @@ An open-source intelligent programming assistant based on the [deepagents](https
 - **Android Automation** (Optional): Integrated AutoGLM for intelligent phone control (tap, swipe, input, etc.)
 - **Vision-Guided Control** (Optional): Use vision-language models to understand and operate phone GUI
 
-<img src="./example-1.png" alt="deep agent" width="100%"/>
+<img src="./DA-AutoGLM.png" alt="deep agent" width="100%"/>
 
 ## 🚀 Quick Start
 
@@ -424,6 +424,7 @@ Skills are reusable Agent capabilities that provide specialized workflows and do
 
 - **web-research** - Structured web research workflow with planning, parallel delegation, and synthesis
 - **langgraph-docs** - LangGraph documentation lookup and guidance
+- **xiaohongshu-posting** - Xiaohongshu (Little Red Book) automated posting workflow, supports both short notes and long articles
 
 To use example skills globally in the default Agent, simply copy them to your Agent's global or project-level skills directory:
 

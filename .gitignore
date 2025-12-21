@@ -9,6 +9,7 @@ develop-eggs/
 dist/
 downloads/
 eggs/
+.deepagents/
 .eggs/
 lib/
 lib64/

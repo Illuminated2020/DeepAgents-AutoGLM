@@ -536,11 +536,42 @@ def show_interactive_help() -> None:
     console.print()
 
 
+def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    """Convert hex color to RGB tuple."""
+    hex_color = hex_color.lstrip("#")
+    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+
+
+def interpolate_color(
+    start_rgb: tuple[int, int, int], end_rgb: tuple[int, int, int], factor: float
+) -> str:
+    """Interpolate between two RGB colors."""
+    r = int(start_rgb[0] + (end_rgb[0] - start_rgb[0]) * factor)
+    g = int(start_rgb[1] + (end_rgb[1] - start_rgb[1]) * factor)
+    b = int(start_rgb[2] + (end_rgb[2] - start_rgb[2]) * factor)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def print_banner() -> None:
+    """Print the DeepAgents banner with a gradient effect."""
+    lines = DEEP_AGENTS_ASCII.strip().split("\n")
+    start_color = COLORS["primary"]
+    end_color = "#ec4899"  # Pink to complement the violet primary
+
+    start_rgb = hex_to_rgb(start_color)
+    end_rgb = hex_to_rgb(end_color)
+
+    for i, line in enumerate(lines):
+        factor = i / (len(lines) - 1) if len(lines) > 1 else 0
+        color = interpolate_color(start_rgb, end_rgb, factor)
+        console.print(line, style=f"bold {color}")
+    console.print()
+
+
 def show_help() -> None:
     """Show help information."""
     console.print()
-    console.print(DEEP_AGENTS_ASCII, style=f"bold {COLORS['primary']}")
-    console.print()
+    print_banner()
 
     console.print("[bold]Usage:[/bold]", style=COLORS["primary"])
     console.print("  deepagents [OPTIONS]                           Start interactive session")

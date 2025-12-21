@@ -27,7 +27,7 @@ from deepagents_cli.integrations.sandbox_factory import (
 from deepagents_cli.skills import execute_skills_command, setup_skills_parser
 from deepagents_cli.middleware.autoglm_middleware import ForceExitException
 from deepagents_cli.tools import fetch_url, http_request, web_search
-from deepagents_cli.ui import TokenTracker, show_help
+from deepagents_cli.ui import TokenTracker, print_banner, show_help
 
 
 def check_cli_dependencies() -> None:
@@ -153,8 +153,7 @@ async def simple_cli(
     """
     console.clear()
     if not no_splash:
-        console.print(DEEP_AGENTS_ASCII, style=f"bold {COLORS['primary']}")
-        console.print()
+        print_banner()
 
     # Extract sandbox ID from backend if using sandbox mode
     sandbox_id: str | None = None

@@ -6,7 +6,7 @@ from pathlib import Path
 from langgraph.checkpoint.memory import InMemorySaver
 
 from .config import COLORS, DEEP_AGENTS_ASCII, console
-from .ui import TokenTracker, show_interactive_help
+from .ui import TokenTracker, print_banner, show_interactive_help
 
 
 def handle_command(command: str, agent, token_tracker: TokenTracker) -> str | bool:
@@ -25,8 +25,7 @@ def handle_command(command: str, agent, token_tracker: TokenTracker) -> str | bo
 
         # Clear screen and show fresh UI
         console.clear()
-        console.print(DEEP_AGENTS_ASCII, style=f"bold {COLORS['primary']}")
-        console.print()
+        print_banner()
         console.print(
             "... Fresh start! Screen cleared and conversation reset.", style=COLORS["agent"]
         )
