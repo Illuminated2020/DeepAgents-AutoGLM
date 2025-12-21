@@ -4,6 +4,28 @@ English | [中文](./README.md)
 
 An open-source intelligent programming assistant based on the [deepagents](https://github.com/langchain-ai/deepagents) framework integrated with [AutoGLM](https://github.com/zai-org/Open-AutoGLM) phone control capabilities. Runs in the terminal and supports Android device automation.
 
+## 💡 Project Highlights
+
+Compared to the original [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) project, this project brings the following core advantages through **middleware architecture**:
+
+- **🔗 Capability Composition**: AutoGLM seamlessly integrates with Web search, Shell, skills system, and memory system, enabling full automation of "search information → analyze decisions → phone operations"
+- **🧠 Intelligent Division of Labor**: Main Agent handles task planning and complex decision-making, while `phone_task` focuses on phone operation execution with clear responsibility boundaries
+- **🎯 Unified Entry Point**: All features managed through a single CLI and `.env` configuration file, no need to configure each capability separately
+- **🔌 Modular Extension**: Pluggable design, AutoGLM as an optional middleware, enabled on-demand via environment variables
+
+**Typical Scenario Example**:
+```bash
+$ deepagents
+> Search for the latest AI news, summarize it in Xiaohongshu style, and post it on Xiaohongshu
+
+# Execution flow:
+# 1. web_search searches for AI news
+# 2. LLM analyzes and generates Xiaohongshu content
+# 3. Main Agent plans posting workflow via xiaohongshu-post skill
+# 4. Invokes sub-agent phone_task to execute phone operations (open app, input, publish)
+# 5. agent.md records posting history
+```
+
 **Core Features:**
 - **Built-in Toolset**: File operations (read, write, edit, search), shell commands, web search, sub-agent delegation
 - **Customizable Skills**: Add domain-specific capabilities through progressive disclosure skill system
@@ -676,6 +698,49 @@ deepagents
 - **Skills system** → Edit `skills/` module
 - **Constants/colors** → Edit `config.py`
 - **AutoGLM middleware** → Edit `middleware/autoglm_middleware.py`
+
+## Roadmap
+
+### ✅ Completed Features
+
+- ✅ AutoGLM middleware integration (vision-guided phone control)
+- ✅ Xiaohongshu (Little Red Book) auto-posting skill
+- ✅ Two-level interrupt mechanism (Ctrl+C graceful exit)
+- ✅ Long text input support
+
+### 🚧 In Progress / 📋 Planned
+
+- 🚧 iOS device support
+- 📋 More phone operation skills (**Contributions welcome!**)
+
+## Contributing
+
+**We especially welcome contributions of phone operation related skills!**
+
+### Skill Contribution Areas
+
+Automation skills for e-commerce, social media, lifestyle services, content creation, etc.
+
+### How to Contribute
+
+**Recommended: Use the `skill-creator` skill to create new skills:**
+
+```bash
+# 1. Copy skill-creator to your skills directory
+cp -r examples/skills/skill-creator ~/.deepagents/agent/skills/
+
+# 2. Let the Agent help you create a skill
+deepagents
+> Help me create a skill for [describe your skill]
+# Agent will use skill-creator to guide you through the creation process
+```
+
+**Or create manually:**
+
+1. Check `examples/skills/xiaohongshu-posting/SKILL.md` for skill format
+2. Create new skill with `deepagents skills create <skill-name>`
+3. Write `SKILL.md` (including YAML metadata and usage instructions)
+4. Submit Pull Request to `examples/skills/` directory
 
 ## Acknowledgments
 

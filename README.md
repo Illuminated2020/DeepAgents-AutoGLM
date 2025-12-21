@@ -4,13 +4,37 @@
 
 基于 [deepagents](https://github.com/langchain-ai/deepagents) 框架集成 [AutoGLM](https://github.com/zai-org/Open-AutoGLM) 手机控制能力的开源智能助手，可在终端中运行，并支持 Android 设备自动化控制。
 
+## 💡 项目亮点
+
+相比原始 [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) 项目，本项目通过**中间件架构**实现以下核心优势：
+
+- **🔗 能力组合**：AutoGLM 与 Web 搜索、Shell、技能系统、记忆系统无缝协同，实现"搜索信息 → 分析决策 → 手机操作"全流程自动化
+- **🧠 智能分工**：主 Agent 负责任务规划和复杂决策，`phone_task` 专注手机操作执行，职责边界清晰
+- **🎯 统一入口**：所有功能通过单一 CLI 和 `.env` 配置文件管理，无需为每个能力单独配置
+- **🔌 模块化扩展**：可插拔设计，AutoGLM 作为可选中间件，通过环境变量按需启用
+
+**典型场景示例**：
+
+```bash
+$ deepagents
+> 搜索最新的 AI 新闻，总结成小红书风格的文案，然后在小红书上发布
+
+# 执行流程：
+# 1. web_search 搜索 AI 新闻
+# 2. LLM 分析并生成小红书文案
+# 3. 主Agent通过xiaohongshu-post skill 规划发布流程
+# 4. 调用子Agent phone_task 执行手机操作（打开应用、输入、发布）
+# 5. agent.md 记录发布历史
+```
+
 **核心特性：**
+
 - **内置工具集**: 文件操作（读、写、编辑、搜索）、Shell 命令、网络搜索、子代理委托
 - **可定制技能**: 通过渐进式披露技能系统添加特定领域能力
 - **持久化记忆**: Agent 会记住您的偏好、编码风格和项目上下文
 - **项目感知**: 自动检测项目根目录并加载项目特定配置
 - **Android 自动化**（可选）: 集成 AutoGLM 实现智能手机控制（点击、滑动、输入等）
-- **视觉引导控制**（可选）: 使用视觉-语言模型理解和操作手机 GUI 
+- **视觉引导控制**（可选）: 使用视觉-语言模型理解和操作手机 GUI
 
 <img src="./DA-AutoGLM.png" alt="deep agent" width="100%"/>
 
@@ -21,6 +45,7 @@
 克隆本项目并安装依赖。
 
 **使用 pip 安装：**
+
 ```bash
 # 克隆仓库
 git clone git@github.com:Illuminated2020/DeepAgents-AutoGLM.git
@@ -31,6 +56,7 @@ pip install -e .
 ```
 
 **或使用 uv（推荐）：**
+
 ```bash
 # 克隆仓库
 git clone git@github.com:Illuminated2020/DeepAgents-AutoGLM.git
@@ -44,16 +70,19 @@ uv pip install -e .
 ```
 
 **在终端中运行 Agent：**
+
 ```bash
 deepagents
 ```
 
 **获取帮助：**
+
 ```bash
 deepagents help
 ```
 
 **常用选项：**
+
 ```bash
 # 使用特定的 Agent 配置
 deepagents --agent mybot
@@ -85,6 +114,7 @@ deepagents skills create my-skill # 创建新技能
 > **注意**: AutoGLM 是可选功能，不安装也不影响 deepagents-cli 的其他功能使用。
 
 **安装 AutoGLM 依赖：**
+
 ```bash
 # 在项目根目录下
 # 使用 pip
@@ -97,16 +127,17 @@ uv pip install -e ".[autoglm]"
 **安装 ADB 工具：**
 
 - **macOS：**
+
   ```bash
   brew install android-platform-tools
   ```
-
 - **Ubuntu/Debian：**
+
   ```bash
   sudo apt-get install android-tools-adb
   ```
-
 - **Windows：**
+
   1. 从 [官方网站](https://developer.android.com/tools/releases/platform-tools) 下载 platform-tools
   2. 解压到自定义路径（如 `C:\platform-tools`）
   3. 配置环境变量：
@@ -116,6 +147,7 @@ uv pip install -e ".[autoglm]"
      - 点击 `确定` 保存
 
 **验证 ADB 安装：**
+
 ```bash
 adb version
 # 应输出版本信息
@@ -124,16 +156,17 @@ adb version
 **配置 Android 设备（Android 7.0+）：**
 
 1. **启用开发者模式：**
+
    - 进入 `设置` → `关于手机` → 找到 `版本号`
    - 连续快速点击 `版本号` 7-10 次
    - 看到"您已处于开发者模式"或"开发者模式已启用"提示
-
 2. **启用 USB 调试：**
+
    - 进入 `设置` → `开发者选项`
    - 启用 `USB 调试`
    - **重要**：部分机型还需启用 `USB 调试(安全设置)` 才能正常执行点击操作
-
 3. **连接设备并验证：**
+
    ```bash
    # 使用支持数据传输的 USB 数据线连接设备（非仅充电线）
    adb devices
@@ -144,10 +177,10 @@ adb version
    ```
 
    **常见问题：**
+
    - 显示 `unauthorized`：在手机上点击"允许 USB 调试"授权弹窗
    - 设备未显示：检查 USB 调试是否启用，尝试更换数据线或 USB 接口
    - 部分机型可能需要重启设备才能生效
-
 4. **安装 ADB Keyboard（用于文本输入）：**
 
    下载 [ADBKeyboard.apk](https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk) 并安装：
@@ -161,11 +194,13 @@ adb version
    ```
 
    **启用 ADB Keyboard：**
+
    - 方式 1：在手机上手动启用
+
      - 进入 `设置` → `语言和输入法` → `虚拟键盘` 或 `键盘列表`
      - 找到并启用 `ADB Keyboard`
-
    - 方式 2：通过命令启用（电脑端执行）
+
      ```bash
      adb shell ime enable com.android.adbkeyboard/.AdbIME
      ```
@@ -223,12 +258,13 @@ AUTOGLM_VISION_API_KEY=your-zhipu-api-key
 如果不想本地部署模型，可以使用以下已部署的第三方服务：
 
 1. **智谱 BigModel**
+
    - 文档：https://docs.bigmodel.cn/cn/api/introduction
    - `AUTOGLM_VISION_MODEL_URL`: `https://open.bigmodel.cn/api/paas/v4`
    - `AUTOGLM_VISION_MODEL_NAME`: `autoglm-phone`
    - `AUTOGLM_VISION_API_KEY`: 在智谱平台申请 API Key
-
 2. **ModelScope（魔搭社区）**
+
    - 文档：https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B
    - `AUTOGLM_VISION_MODEL_URL`: `https://api-inference.modelscope.cn/v1`
    - `AUTOGLM_VISION_MODEL_NAME`: `ZhipuAI/AutoGLM-Phone-9B`
@@ -236,10 +272,10 @@ AUTOGLM_VISION_API_KEY=your-zhipu-api-key
 
 **模型信息：**
 
-| 模型 | 下载链接 | 说明 |
-|------|---------|------|
-| AutoGLM-Phone-9B | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B) | 针对中文手机应用优化 |
-| AutoGLM-Phone-9B-Multilingual | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B-Multilingual)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B-Multilingual) | 支持英语等多语言场景 |
+| 模型                          | 下载链接                                                                                                                                                              | 说明                 |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| AutoGLM-Phone-9B              | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B) `<br>`[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B)                           | 针对中文手机应用优化 |
+| AutoGLM-Phone-9B-Multilingual | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B-Multilingual) `<br>`[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B-Multilingual) | 支持英语等多语言场景 |
 
 ## 内置工具
 
@@ -247,33 +283,33 @@ Agent 自带以下内置工具（无需配置即可使用）：
 
 ### 基础工具
 
-| 工具 | 描述 |
-|------|-------------|
-| `ls` | 列出文件和目录 |
-| `read_file` | 读取文件内容 |
-| `write_file` | 创建或覆写文件 |
-| `edit_file` | 对现有文件进行针对性编辑 |
-| `glob` | 查找匹配模式的文件（例如 `**/*.py`） |
-| `grep` | 跨文件搜索文本模式 |
-| `shell` | 执行 Shell 命令（本地模式） |
-| `execute` | 在远程沙箱中执行命令（沙箱模式） |
-| `web_search` | 使用 Tavily API 搜索网络 |
-| `fetch_url` | 获取网页并转换为 Markdown |
-| `task` | 将工作委托给子代理进行并行执行 |
-| `write_todos` | 为复杂工作创建和管理任务列表 |
+| 工具            | 描述                                   |
+| --------------- | -------------------------------------- |
+| `ls`          | 列出文件和目录                         |
+| `read_file`   | 读取文件内容                           |
+| `write_file`  | 创建或覆写文件                         |
+| `edit_file`   | 对现有文件进行针对性编辑               |
+| `glob`        | 查找匹配模式的文件（例如 `**/*.py`） |
+| `grep`        | 跨文件搜索文本模式                     |
+| `shell`       | 执行 Shell 命令（本地模式）            |
+| `execute`     | 在远程沙箱中执行命令（沙箱模式）       |
+| `web_search`  | 使用 Tavily API 搜索网络               |
+| `fetch_url`   | 获取网页并转换为 Markdown              |
+| `task`        | 将工作委托给子代理进行并行执行         |
+| `write_todos` | 为复杂工作创建和管理任务列表           |
 
 ### AutoGLM 工具（需要启用 `AUTOGLM_ENABLED=true`）
 
-| 工具 | 描述 |
-|------|-------------|
-| `phone_task` | 🎯 **高级任务工具** - 执行自然语言手机任务（推荐） |
-| `phone_tap` | 在指定坐标点击 |
-| `phone_swipe` | 执行滑动手势 |
-| `phone_type` | 输入文本 |
-| `phone_screenshot` | 截取屏幕 |
-| `phone_back` | 按返回键 |
-| `phone_home` | 按主屏幕键 |
-| `phone_launch` | 按名称启动应用 |
+| 工具                 | 描述                                                    |
+| -------------------- | ------------------------------------------------------- |
+| `phone_task`       | 🎯**高级任务工具** - 执行自然语言手机任务（推荐） |
+| `phone_tap`        | 在指定坐标点击                                          |
+| `phone_swipe`      | 执行滑动手势                                            |
+| `phone_type`       | 输入文本                                                |
+| `phone_screenshot` | 截取屏幕                                                |
+| `phone_back`       | 按返回键                                                |
+| `phone_home`       | 按主屏幕键                                              |
+| `phone_launch`     | 按名称启动应用                                          |
 
 **AutoGLM 使用示例：**
 
@@ -293,6 +329,7 @@ Agent：使用 phone_task 工具打开微信、找到聊天并发送消息
 > **人工确认（HITL）要求**
 >
 > 潜在破坏性操作在执行前需要用户批准：
+>
 > - **文件操作**: `write_file`、`edit_file`
 > - **命令执行**: `shell`、`execute`
 > - **外部请求**: `web_search`、`fetch_url`
@@ -300,9 +337,10 @@ Agent：使用 phone_task 工具打开微信、找到聊天并发送消息
 > - **手机操作**: `phone_task`、`phone_tap`、`phone_swipe` 等
 >
 > 每个操作都会显示操作详情并提示批准。使用 `--auto-approve` 跳过提示：
+>
 > ```bash
 > deepagents --auto-approve
-> ``` 
+> ```
 
 ## Agent 配置
 
@@ -346,11 +384,13 @@ my-project/
 ```
 
 CLI 会自动检测项目根目录（通过 `.git`）并加载：
+
 - 项目特定的 `agent.md`（来自 `[项目根]/.deepagents/agent.md`）
 - 项目特定的技能（来自 `[项目根]/.deepagents/skills/`）
 - 项目特定的环境配置（来自 `[项目根]/.deepagents/.env`）
 
 全局和项目配置会一起加载，允许您：
+
 - 在全局 agent.md 中保持通用编码风格/偏好
 - 在项目 agent.md 中添加项目特定的上下文、约定或指南
 - 通过版本控制与团队共享项目特定技能
@@ -362,24 +402,28 @@ CLI 会自动检测项目根目录（通过 `.git`）并加载：
 `agent.md` 文件提供持久化记忆，在每次会话开始时自动加载。全局和项目级别的 `agent.md` 文件会一起加载并注入到系统提示中。
 
 **全局 `agent.md`**（`~/.deepagents/agent/agent.md`）
-  - 您的个性、风格和通用编码偏好
-  - 一般语气和沟通风格
-  - 通用编码偏好（格式化、类型提示等）
-  - 适用于所有场景的工具使用模式
-  - 不随项目变化的工作流和方法论
+
+- 您的个性、风格和通用编码偏好
+- 一般语气和沟通风格
+- 通用编码偏好（格式化、类型提示等）
+- 适用于所有场景的工具使用模式
+- 不随项目变化的工作流和方法论
 
 **项目 `agent.md`**（项目根目录中的 `.deepagents/agent.md`）
-  - 项目特定的上下文和约定
-  - 项目架构和设计模式
-  - 此代码库特定的编码约定
-  - 测试策略和部署流程
-  - 团队指南和项目结构
+
+- 项目特定的上下文和约定
+- 项目架构和设计模式
+- 此代码库特定的编码约定
+- 测试策略和部署流程
+- 团队指南和项目结构
 
 **工作原理（AgentMemoryMiddleware）：**
+
 - 在启动时加载两个文件，并作为 `<user_memory>` 和 `<project_memory>` 注入系统提示
 - 附加[记忆管理指令](deepagents_cli/agent_memory.py#L44-L158)，说明何时/如何更新记忆文件
 
 **Agent 何时更新记忆：**
+
 - 当您描述它应该如何行为时 **立即** 更新
 - 当您对其工作给出反馈时 **立即** 更新
 - 当您明确要求它记住某事时
@@ -392,11 +436,13 @@ Agent 使用 `edit_file` 在学习偏好或收到反馈时更新记忆。
 除了 `agent.md`，您还可以在 `.deepagents/` 中创建额外的记忆文件用于结构化项目知识。这些工作方式类似于 [Anthropic 的记忆工具](https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool)。Agent 会收到[详细指令](deepagents_cli/agent_memory.py#L123-L158)，说明何时读取和更新这些文件。
 
 **工作原理：**
+
 1. 在 `[项目根]/.deepagents/` 中创建 Markdown 文件（例如 `api-design.md`、`architecture.md`、`deployment.md`）
 2. Agent 在任务相关时检查这些文件（不会自动加载到每个提示中）
 3. Agent 在学习项目模式时使用 `write_file` 或 `edit_file` 创建/更新记忆文件
 
 **示例工作流：**
+
 ```bash
 # Agent 发现部署模式并保存
 .deepagents/
@@ -407,12 +453,14 @@ Agent 使用 `edit_file` 在学习偏好或收到反馈时更新记忆。
 ```
 
 **Agent 何时读取记忆文件：**
+
 - 在新会话开始时（检查存在哪些文件）
 - 在回答项目特定主题的问题之前
 - 当您引用过去的工作或模式时
 - 在执行与已保存知识领域匹配的任务时
 
 **优势：**
+
 - **持久化学习**：Agent 跨会话记住项目模式
 - **团队协作**：通过版本控制共享项目知识
 - **上下文检索**：仅在需要时加载相关记忆（减少 token 使用）
@@ -504,6 +552,7 @@ AUTOGLM_VERBOSE=false
 ### 连接 Android 设备
 
 **USB 连接：**
+
 ```bash
 # 1. 在设备上启用 USB 调试
 #    设置 → 关于手机 → 连续点击 7 次"版本号"
@@ -598,17 +647,17 @@ Agent：我将使用 phone_task 工具打开微信、找到张三的聊天并发
 
 AutoGLM 内置了 50+ 款主流应用配置：
 
-| 分类 | 应用 |
-|------|------|
-| 社交通讯 | 微信、QQ、微博、钉钉 |
-| 电商购物 | 淘宝、京东、拼多多、天猫 |
-| 美食外卖 | 美团、饿了么、肯德基、麦当劳 |
+| 分类     | 应用                                      |
+| -------- | ----------------------------------------- |
+| 社交通讯 | 微信、QQ、微博、钉钉                      |
+| 电商购物 | 淘宝、京东、拼多多、天猫                  |
+| 美食外卖 | 美团、饿了么、肯德基、麦当劳              |
 | 出行旅游 | 携程、12306、滴滴出行、高德地图、百度地图 |
-| 视频娱乐 | 抖音、快手、bilibili、爱奇艺、腾讯视频 |
-| 音乐音频 | 网易云音乐、QQ音乐、喜马拉雅 |
-| 生活服务 | 大众点评、支付宝 |
-| 内容社区 | 小红书、知乎、豆瓣 |
-| 系统应用 | 电话、短信、相机、设置、浏览器 |
+| 视频娱乐 | 抖音、快手、bilibili、爱奇艺、腾讯视频    |
+| 音乐音频 | 网易云音乐、QQ音乐、喜马拉雅              |
+| 生活服务 | 大众点评、支付宝                          |
+| 内容社区 | 小红书、知乎、豆瓣                        |
+| 系统应用 | 电话、短信、相机、设置、浏览器            |
 
 ## 技术架构
 
@@ -627,11 +676,13 @@ AutoGLM 内置了 50+ 款主流应用配置：
 当启用 AutoGLM 时，通过 **Middleware 机制**注入 Android 控制能力：
 
 **核心设计**
+
 - 使用 `content_blocks` 处理多模态消息（文本 + 屏幕截图）
 - 使用 `HumanInTheLoopMiddleware` 实现敏感操作审批
 - 使用子 Agent 机制创建专门的 Phone Agent
 
 **工作流程**
+
 ```
 用户请求 → 主 Agent → phone_task 工具 → Phone Sub-Agent
                                           ↓
@@ -639,6 +690,7 @@ AutoGLM 内置了 50+ 款主流应用配置：
 ```
 
 **组件结构**
+
 - `AutoGLMMiddleware`: 注入工具和系统检查（`middleware/autoglm_middleware.py`）
 - `ADBController`: ADB 命令封装（`middleware/autoglm/adb_controller.py`）
 - `ActionParser`: 解析模型输出动作（`middleware/autoglm/action_parser.py`）
@@ -676,6 +728,49 @@ deepagents
 - **技能系统** → 编辑 `skills/` 模块
 - **常量/颜色** → 编辑 `config.py`
 - **AutoGLM 中间件** → 编辑 `middleware/autoglm_middleware.py`
+
+## 路线图
+
+### ✅ 已完成功能
+
+- ✅ AutoGLM 中间件集成（视觉引导手机控制）
+- ✅ 小红书自动发帖技能
+- ✅ 双层中断机制（Ctrl+C 优雅退出）
+- ✅ 长文本输入支持
+
+### 🚧 开发中 / 📋 计划中
+
+- 🚧 iOS 设备支持
+- 📋 更多手机操作技能（**欢迎贡献！**）
+
+## 贡献指南
+
+**欢迎贡献手机操作相关的技能（Skills）！**
+
+### 技能贡献方向
+
+电商购物、社交媒体、生活服务、内容创作等方向的自动化技能。
+
+### 如何贡献
+
+**推荐利用 `skill-creator` 技能来创建新技能：**
+
+```bash
+# 1. 将 skill-creator 复制到你的技能目录
+cp -r examples/skills/skill-creator ~/.deepagents/agent/skills/
+
+# 2. 让 Agent 帮你创建技能
+deepagents
+> 帮我创建一个 [描述你的技能] 的技能
+# Agent 会利用 skill-creator 引导你完成创建过程
+```
+
+**或手动创建：**
+
+1. 参考 `examples/skills/xiaohongshu-posting/SKILL.md` 了解技能格式
+2. 使用 `deepagents skills create <skill-name>` 创建技能框架
+3. 编写 `SKILL.md`（包含 YAML 元数据和使用说明）
+4. 提交 Pull Request 到 `examples/skills/` 目录
 
 ## 致谢
 
