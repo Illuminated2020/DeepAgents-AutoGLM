@@ -442,6 +442,10 @@ def cli_main() -> None:
         # Clean exit on Ctrl+C - suppress ugly traceback
         console.print("\n\n[yellow]Interrupted[/yellow]")
         sys.exit(0)
+    except ForceExitException:
+        # Clean exit on double Ctrl+C - cleanup already done by signal handler
+        # Suppress traceback for better UX
+        sys.exit(1)
 
 
 if __name__ == "__main__":
