@@ -106,7 +106,8 @@ If you need Android device automation features, install AutoGLM support.
 
 > **Note**: AutoGLM is an optional feature. Not installing it won't affect other deepagents-cli functionalities.
 
-**Install AutoGLM dependencies:**
+**1. Install AutoGLM dependencies:**
+
 ```bash
 # In project root directory
 # Using pip
@@ -116,147 +117,43 @@ pip install -e ".[autoglm]"
 uv pip install -e ".[autoglm]"
 ```
 
-**Install ADB tools:**
+**2. Install ADB tools:**
 
-- **macOS:**
-  ```bash
-  brew install android-platform-tools
-  ```
+- **macOS:** `brew install android-platform-tools`
+- **Ubuntu/Debian:** `sudo apt-get install android-tools-adb`
+- **Windows:** Download from [official website](https://developer.android.com/tools/releases/platform-tools) and configure environment variables
 
-- **Ubuntu/Debian:**
-  ```bash
-  sudo apt-get install android-tools-adb
-  ```
-
-- **Windows:**
-  1. Download platform-tools from [official website](https://developer.android.com/tools/releases/platform-tools)
-  2. Extract to a custom path (e.g., `C:\platform-tools`)
-  3. Configure environment variables:
-     - Right-click `This PC` → `Properties` → `Advanced system settings` → `Environment Variables`
-     - Find `Path` in `System variables`, click `Edit`
-     - Click `New`, add the full path to platform-tools (e.g., `C:\platform-tools`)
-     - Click `OK` to save
-
-**Verify ADB installation:**
+Verify installation:
 ```bash
-adb version
-# Should output version information
+adb version  # Should output version information
 ```
 
-**Configure Android Device (Android 7.0+):**
-
-1. **Enable Developer Mode:**
-   - Go to `Settings` → `About phone` → Find `Build number`
-   - Tap `Build number` 7-10 times continuously
-   - You should see "You are now a developer" or "Developer mode enabled" message
-
-2. **Enable USB Debugging:**
-   - Go to `Settings` → `Developer options`
-   - Enable `USB debugging`
-   - **Important**: Some devices also need to enable `USB debugging (Security settings)` for tap operations to work properly
-
-3. **Connect device and verify:**
-   ```bash
-   # Use a data-capable USB cable (not charging-only cable)
-   adb devices
-
-   # Should display device list:
-   # List of devices attached
-   # XXXXXXXX    device
-   ```
-
-   **Common issues:**
-   - Showing `unauthorized`: Tap "Allow USB debugging" authorization popup on your phone
-   - Device not showing: Check if USB debugging is enabled, try different cable or USB port
-   - Some devices may require a restart to take effect
-
-4. **Install ADB Keyboard (for text input):**
-
-   Download [ADBKeyboard.apk](https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk) and install:
-
-   ```bash
-   # Method 1: Install via ADB (execute on computer)
-   wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
-   adb install -r ADBKeyboard.apk
-
-   # Method 2: Download and install APK directly on your phone
-   ```
-
-   **Enable ADB Keyboard:**
-   - Method 1: Enable manually on your phone
-     - Go to `Settings` → `Language and input` → `Virtual keyboard` or `Keyboard list`
-     - Find and enable `ADB Keyboard`
-
-   - Method 2: Enable via command (execute on computer)
-     ```bash
-     adb shell ime enable com.android.adbkeyboard/.AdbIME
-     ```
-
-**Configure environment variables:**
-
-Copy `.env.example` to `.env` and configure:
+**3. Quick device configuration:**
 
 ```bash
-cp .env.example .env
+# 1. Enable Developer Mode on your phone
+#    Settings → About phone → Tap "Build number" 7-10 times
+
+# 2. Enable USB Debugging
+#    Settings → Developer options → USB debugging → Enable
+#    (Some devices also need to enable "USB debugging (Security settings)")
+
+# 3. Connect device and verify
+adb devices
+# Should display: XXXXXXXX    device
+# If showing unauthorized, tap "Allow USB debugging" on your phone
+
+# 4. Install ADB Keyboard (for text input)
+wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
+adb install -r ADBKeyboard.apk
+adb shell ime enable com.android.adbkeyboard/.AdbIME
 ```
 
-Edit the `.env` file and configure at least the following items:
+**4. Configure environment variables and vision model:**
 
-```bash
-# Basic LLM configuration
-OPENAI_API_KEY=your-api-key
-OPENAI_MODEL=gpt-4
+For detailed configuration steps (including environment variables, WiFi connection, model deployment, etc.), please refer to the [AutoGLM Configuration Details](#autoglm-configuration-details) section.
 
-# AutoGLM configuration
-AUTOGLM_ENABLED=true
-AUTOGLM_VISION_MODEL_URL=http://localhost:8000/v1  # or Zhipu AI URL
-AUTOGLM_VISION_MODEL_NAME=autoglm-phone-9b
-AUTOGLM_VISION_API_KEY=EMPTY  # Use EMPTY for local deployment
-```
-
-For detailed configuration, please refer to the [.env.example](.env.example) file.
-
-**Start vision model (local deployment):**
-
-```bash
-python3 -m vllm.entrypoints.openai.api_server \
-  --served-model-name autoglm-phone-9b \
-  --allowed-local-media-path / \
-  --mm-encoder-tp-mode data \
-  --mm_processor_cache_type shm \
-  --mm_processor_kwargs '{"max_pixels":5000000}' \
-  --max-model-len 25480 \
-  --chat-template-content-format string \
-  --limit-mm-per-prompt '{"image":10}' \
-  --model zai-org/AutoGLM-Phone-9B \
-  --port 8000
-```
-
-Or use Zhipu AI cloud API (no local deployment needed):
-
-```bash
-AUTOGLM_VISION_MODEL_URL=https://open.bigmodel.cn/api/paas/v4
-AUTOGLM_VISION_MODEL_NAME=autoglm-phone
-AUTOGLM_VISION_API_KEY=your-zhipu-api-key
-```
-
-**Using Third-party Model Services (Recommended):**
-
-If you don't want to deploy models locally, you can use the following third-party services:
-
-1. **Zhipu BigModel**
-   - Documentation: https://docs.bigmodel.cn/cn/api/introduction
-   - `AUTOGLM_VISION_MODEL_URL`: `https://open.bigmodel.cn/api/paas/v4`
-   - `AUTOGLM_VISION_MODEL_NAME`: `autoglm-phone`
-   - `AUTOGLM_VISION_API_KEY`: Apply for API Key on Zhipu platform
-
-2. **ModelScope**
-   - Documentation: https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B
-   - `AUTOGLM_VISION_MODEL_URL`: `https://api-inference.modelscope.cn/v1`
-   - `AUTOGLM_VISION_MODEL_NAME`: `ZhipuAI/AutoGLM-Phone-9B`
-   - `AUTOGLM_VISION_API_KEY`: Apply for API Key on ModelScope platform
-
-**Model Information:**
+**Available models:**
 
 | Model | Download Links | Description |
 |-------|----------------|-------------|
@@ -494,18 +391,32 @@ Skills follow Anthropic's [progressive disclosure pattern](https://www.anthropic
 
 ## AutoGLM Configuration Details
 
-### Environment Variable Explanation
+### I. Environment Variable Configuration
 
-Configure AutoGLM in `.env` file:
+**Create configuration file:**
 
 ```bash
+# Copy example configuration file
+cp .env.example .env
+```
+
+**Edit `.env` file:**
+
+```bash
+# ============ Basic LLM Configuration ============
+OPENAI_API_KEY=your-api-key
+OPENAI_MODEL=gpt-4
+
+# ============ AutoGLM Configuration ============
 # Enable AutoGLM
 AUTOGLM_ENABLED=true
 
 # Vision model configuration
-AUTOGLM_VISION_MODEL_URL=http://localhost:8000/v1
+AUTOGLM_VISION_MODEL_URL=http://localhost:8000/v1  # Local deployment
+# Or use cloud service:
+# AUTOGLM_VISION_MODEL_URL=https://open.bigmodel.cn/api/paas/v4  # Zhipu AI
 AUTOGLM_VISION_MODEL_NAME=autoglm-phone-9b
-AUTOGLM_VISION_API_KEY=EMPTY
+AUTOGLM_VISION_API_KEY=EMPTY  # Use EMPTY for local deployment, use actual API Key for cloud
 
 # Device configuration (optional, leave empty to auto-detect first device)
 # AUTOGLM_DEVICE_ID=
@@ -523,21 +434,37 @@ AUTOGLM_EXPOSE_LOW_LEVEL_TOOLS=false
 AUTOGLM_VERBOSE=false
 ```
 
-### Connecting Android Devices
+For detailed configuration, please refer to the [.env.example](.env.example) file.
 
-**USB Connection:**
+### II. Connecting Android Devices
+
+#### Method 1: USB Connection (Recommended)
+
 ```bash
-# 1. Enable USB debugging on device
-#    Settings → About phone → Tap "Build number" 7 times
-#    Settings → Developer options → Enable USB debugging
+# 1. Enable Developer Mode on device
+#    Settings → About phone → Find "Build number"
+#    Tap "Build number" 7-10 times continuously
+#    You should see "You are now a developer" message
 
-# 2. Connect device and verify
+# 2. Enable USB Debugging
+#    Settings → Developer options → USB debugging → Enable
+#    (Some devices also need to enable "USB debugging (Security settings)")
+
+# 3. Connect device with USB cable
+#    Note: Must use a data-capable cable (not charging-only cable)
+
+# 4. Verify connection
 adb devices
+# Should display: List of devices attached
+#                 XXXXXXXX    device
+
+# Common issues:
+# - Showing unauthorized: Tap "Allow USB debugging" authorization popup on your phone
+# - Device not showing: Check if USB debugging is enabled, try different cable or USB port
+# - Some devices may require a restart to take effect
 ```
 
-**WiFi Connection (No USB cable required):**
-
-For Android 11+ wireless debugging:
+#### Method 2: WiFi Connection (Android 11+)
 
 ```bash
 # 1. Enable wireless debugging on your phone
@@ -559,9 +486,7 @@ adb devices
 # Should display: 192.168.1.100:41589    device
 ```
 
-**Enable TCP/IP mode via USB (Android 7+):**
-
-If your device doesn't support wireless debugging, you can enable network debugging via USB first:
+#### Method 3: Enable TCP/IP Mode via USB (Android 7+)
 
 ```bash
 # 1. Connect device via USB
@@ -588,7 +513,7 @@ adb devices
 - **Connection dropped**: WiFi may have disconnected, use `adb connect <IP>:5555` to reconnect
 - **Not working after device restart**: Some devices disable TCP/IP after restart, need to re-enable via USB
 
-### Installing ADB Keyboard
+### III. Installing ADB Keyboard
 
 Text input functionality requires ADB Keyboard:
 
@@ -597,11 +522,80 @@ Text input functionality requires ADB Keyboard:
 wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
 adb install -r ADBKeyboard.apk
 
-# Enable on device
-# Settings → Language and input → Current keyboard → Select ADB Keyboard
+# Method 1: Enable via command (recommended)
+adb shell ime enable com.android.adbkeyboard/.AdbIME
+
+# Method 2: Enable manually on device
+# Settings → Language and input → Virtual keyboard → Enable ADB Keyboard
 ```
 
-### Usage Examples
+### IV. Vision Model Configuration
+
+AutoGLM requires a vision model to understand phone screens. You can choose local deployment or cloud services.
+
+#### Option 1: Local Deployment (Requires GPU)
+
+**Install vLLM:**
+
+```bash
+pip install vllm
+```
+
+**Start vision model service:**
+
+```bash
+python3 -m vllm.entrypoints.openai.api_server \
+  --served-model-name autoglm-phone-9b \
+  --allowed-local-media-path / \
+  --mm-encoder-tp-mode data \
+  --mm_processor_cache_type shm \
+  --mm_processor_kwargs '{"max_pixels":5000000}' \
+  --max-model-len 25480 \
+  --chat-template-content-format string \
+  --limit-mm-per-prompt '{"image":10}' \
+  --model zai-org/AutoGLM-Phone-9B \
+  --port 8000
+```
+
+**Configure environment variables:**
+
+```bash
+AUTOGLM_VISION_MODEL_URL=http://localhost:8000/v1
+AUTOGLM_VISION_MODEL_NAME=autoglm-phone-9b
+AUTOGLM_VISION_API_KEY=EMPTY
+```
+
+#### Option 2: Using Third-party Cloud Services (Recommended - No GPU Required)
+
+**2.1 Zhipu BigModel**
+
+- **Documentation**: https://docs.bigmodel.cn/cn/api/introduction
+- **Apply for API Key**: Register and apply on Zhipu platform
+
+**Configure environment variables:**
+
+```bash
+AUTOGLM_VISION_MODEL_URL=https://open.bigmodel.cn/api/paas/v4
+AUTOGLM_VISION_MODEL_NAME=autoglm-phone
+AUTOGLM_VISION_API_KEY=your-zhipu-api-key
+```
+
+**2.2 ModelScope**
+
+- **Documentation**: https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B
+- **Apply for API Key**: Register and apply on ModelScope platform
+
+**Configure environment variables:**
+
+```bash
+AUTOGLM_VISION_MODEL_URL=https://api-inference.modelscope.cn/v1
+AUTOGLM_VISION_MODEL_NAME=ZhipuAI/AutoGLM-Phone-9B
+AUTOGLM_VISION_API_KEY=your-modelscope-api-key
+```
+
+### V. Usage Examples
+
+After completing the above configuration, you can start using:
 
 ```bash
 $ deepagents
@@ -616,7 +610,7 @@ User: Send WeChat message to Zhang San saying "See you tomorrow"
 Agent: I will use the phone_task tool to open WeChat, find Zhang San's chat, and send the message...
 ```
 
-### Supported Apps
+### VI. Supported Apps
 
 AutoGLM has built-in configurations for 50+ mainstream apps:
 

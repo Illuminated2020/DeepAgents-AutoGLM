@@ -113,7 +113,7 @@ deepagents skills create my-skill # 创建新技能
 
 > **注意**: AutoGLM 是可选功能，不安装也不影响 deepagents-cli 的其他功能使用。
 
-**安装 AutoGLM 依赖：**
+**1. 安装 AutoGLM 依赖：**
 
 ```bash
 # 在项目根目录下
@@ -124,153 +124,43 @@ pip install -e ".[autoglm]"
 uv pip install -e ".[autoglm]"
 ```
 
-**安装 ADB 工具：**
+**2. 安装 ADB 工具：**
 
-- **macOS：**
+- **macOS：** `brew install android-platform-tools`
+- **Ubuntu/Debian：** `sudo apt-get install android-tools-adb`
+- **Windows：** 从 [官方网站](https://developer.android.com/tools/releases/platform-tools) 下载并配置环境变量
 
-  ```bash
-  brew install android-platform-tools
-  ```
-- **Ubuntu/Debian：**
-
-  ```bash
-  sudo apt-get install android-tools-adb
-  ```
-- **Windows：**
-
-  1. 从 [官方网站](https://developer.android.com/tools/releases/platform-tools) 下载 platform-tools
-  2. 解压到自定义路径（如 `C:\platform-tools`）
-  3. 配置环境变量：
-     - 右键 `此电脑` → `属性` → `高级系统设置` → `环境变量`
-     - 在 `系统变量` 中找到 `Path`，点击 `编辑`
-     - 点击 `新建`，添加 platform-tools 的完整路径（如 `C:\platform-tools`）
-     - 点击 `确定` 保存
-
-**验证 ADB 安装：**
-
+验证安装：
 ```bash
-adb version
-# 应输出版本信息
+adb version  # 应输出版本信息
 ```
 
-**配置 Android 设备（Android 7.0+）：**
-
-1. **启用开发者模式：**
-
-   - 进入 `设置` → `关于手机` → 找到 `版本号`
-   - 连续快速点击 `版本号` 7-10 次
-   - 看到"您已处于开发者模式"或"开发者模式已启用"提示
-2. **启用 USB 调试：**
-
-   - 进入 `设置` → `开发者选项`
-   - 启用 `USB 调试`
-   - **重要**：部分机型还需启用 `USB 调试(安全设置)` 才能正常执行点击操作
-3. **连接设备并验证：**
-
-   ```bash
-   # 使用支持数据传输的 USB 数据线连接设备（非仅充电线）
-   adb devices
-
-   # 应显示设备列表：
-   # List of devices attached
-   # XXXXXXXX    device
-   ```
-
-   **常见问题：**
-
-   - 显示 `unauthorized`：在手机上点击"允许 USB 调试"授权弹窗
-   - 设备未显示：检查 USB 调试是否启用，尝试更换数据线或 USB 接口
-   - 部分机型可能需要重启设备才能生效
-4. **安装 ADB Keyboard（用于文本输入）：**
-
-   下载 [ADBKeyboard.apk](https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk) 并安装：
-
-   ```bash
-   # 方式 1：通过 ADB 安装（电脑端执行）
-   wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
-   adb install -r ADBKeyboard.apk
-
-   # 方式 2：直接在手机上下载安装 APK 文件
-   ```
-
-   **启用 ADB Keyboard：**
-
-   - 方式 1：在手机上手动启用
-
-     - 进入 `设置` → `语言和输入法` → `虚拟键盘` 或 `键盘列表`
-     - 找到并启用 `ADB Keyboard`
-   - 方式 2：通过命令启用（电脑端执行）
-
-     ```bash
-     adb shell ime enable com.android.adbkeyboard/.AdbIME
-     ```
-
-**配置环境变量：**
-
-复制 `.env.example` 为 `.env` 并配置：
+**3. 快速设备配置：**
 
 ```bash
-cp .env.example .env
+# 1. 在手机上启用开发者模式
+#    设置 → 关于手机 → 连续点击"版本号" 7-10 次
+
+# 2. 启用 USB 调试
+#    设置 → 开发者选项 → USB 调试 → 开启
+#    （部分机型还需启用"USB 调试(安全设置)"）
+
+# 3. 连接设备并验证
+adb devices
+# 应显示: XXXXXXXX    device
+# 如显示 unauthorized，在手机上点击"允许 USB 调试"
+
+# 4. 安装 ADB Keyboard（用于文本输入）
+wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
+adb install -r ADBKeyboard.apk
+adb shell ime enable com.android.adbkeyboard/.AdbIME
 ```
 
-编辑 `.env` 文件，至少配置以下项：
+**4. 配置环境变量和视觉模型：**
 
-```bash
-# 基础 LLM 配置
-OPENAI_API_KEY=your-api-key
-OPENAI_MODEL=gpt-4
+详细配置步骤（包括环境变量、WiFi 连接、模型部署等）请参考 [AutoGLM 配置详解](#autoglm-配置详解) 章节。
 
-# AutoGLM 配置
-AUTOGLM_ENABLED=true
-AUTOGLM_VISION_MODEL_URL=http://localhost:8000/v1  # 或智谱 AI URL
-AUTOGLM_VISION_MODEL_NAME=autoglm-phone-9b
-AUTOGLM_VISION_API_KEY=EMPTY  # 本地部署使用 EMPTY
-```
-
-详细配置说明请参考 [.env.example](.env.example) 文件。
-
-**启动视觉模型（本地部署）：**
-
-```bash
-python3 -m vllm.entrypoints.openai.api_server \
-  --served-model-name autoglm-phone-9b \
-  --allowed-local-media-path / \
-  --mm-encoder-tp-mode data \
-  --mm_processor_cache_type shm \
-  --mm_processor_kwargs '{"max_pixels":5000000}' \
-  --max-model-len 25480 \
-  --chat-template-content-format string \
-  --limit-mm-per-prompt '{"image":10}' \
-  --model zai-org/AutoGLM-Phone-9B \
-  --port 8000
-```
-
-或使用智谱 AI 云端 API（无需本地部署）：
-
-```bash
-AUTOGLM_VISION_MODEL_URL=https://open.bigmodel.cn/api/paas/v4
-AUTOGLM_VISION_MODEL_NAME=autoglm-phone
-AUTOGLM_VISION_API_KEY=your-zhipu-api-key
-```
-
-**使用第三方模型服务（推荐）：**
-
-如果不想本地部署模型，可以使用以下已部署的第三方服务：
-
-1. **智谱 BigModel**
-
-   - 文档：https://docs.bigmodel.cn/cn/api/introduction
-   - `AUTOGLM_VISION_MODEL_URL`: `https://open.bigmodel.cn/api/paas/v4`
-   - `AUTOGLM_VISION_MODEL_NAME`: `autoglm-phone`
-   - `AUTOGLM_VISION_API_KEY`: 在智谱平台申请 API Key
-2. **ModelScope（魔搭社区）**
-
-   - 文档：https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B
-   - `AUTOGLM_VISION_MODEL_URL`: `https://api-inference.modelscope.cn/v1`
-   - `AUTOGLM_VISION_MODEL_NAME`: `ZhipuAI/AutoGLM-Phone-9B`
-   - `AUTOGLM_VISION_API_KEY`: 在 ModelScope 平台申请 API Key
-
-**模型信息：**
+**可选模型：**
 
 | 模型                          | 下载链接                                                                                                                                                              | 说明                 |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
@@ -520,18 +410,32 @@ $ "创建一个实现 LangGraph Agent 的 agent.py 脚本"
 
 ## AutoGLM 配置详解
 
-### 环境变量说明
+### 一、环境变量配置
 
-在 `.env` 文件中配置 AutoGLM：
+**创建配置文件：**
 
 ```bash
+# 复制示例配置文件
+cp .env.example .env
+```
+
+**编辑 `.env` 文件：**
+
+```bash
+# ============ 基础 LLM 配置 ============
+OPENAI_API_KEY=your-api-key
+OPENAI_MODEL=gpt-4
+
+# ============ AutoGLM 配置 ============
 # 启用 AutoGLM
 AUTOGLM_ENABLED=true
 
 # 视觉模型配置
-AUTOGLM_VISION_MODEL_URL=http://localhost:8000/v1
+AUTOGLM_VISION_MODEL_URL=http://localhost:8000/v1  # 本地部署
+# 或使用云端服务：
+# AUTOGLM_VISION_MODEL_URL=https://open.bigmodel.cn/api/paas/v4  # 智谱 AI
 AUTOGLM_VISION_MODEL_NAME=autoglm-phone-9b
-AUTOGLM_VISION_API_KEY=EMPTY
+AUTOGLM_VISION_API_KEY=EMPTY  # 本地部署使用 EMPTY，云端使用实际 API Key
 
 # 设备配置（可选，留空自动检测第一个设备）
 # AUTOGLM_DEVICE_ID=
@@ -549,22 +453,37 @@ AUTOGLM_EXPOSE_LOW_LEVEL_TOOLS=false
 AUTOGLM_VERBOSE=false
 ```
 
-### 连接 Android 设备
+详细配置说明请参考 [.env.example](.env.example) 文件。
 
-**USB 连接：**
+### 二、连接 Android 设备
+
+#### 方式一：USB 连接（推荐）
 
 ```bash
-# 1. 在设备上启用 USB 调试
-#    设置 → 关于手机 → 连续点击 7 次"版本号"
-#    设置 → 开发者选项 → 启用 USB 调试
+# 1. 在设备上启用开发者模式
+#    设置 → 关于手机 → 找到"版本号"
+#    连续快速点击"版本号" 7-10 次
+#    看到"您已处于开发者模式"提示
 
-# 2. 连接设备并验证
+# 2. 启用 USB 调试
+#    设置 → 开发者选项 → USB 调试 → 开启
+#    （部分机型还需启用"USB 调试(安全设置)"）
+
+# 3. 使用 USB 数据线连接设备
+#    注意：必须使用支持数据传输的数据线（非仅充电线）
+
+# 4. 验证连接
 adb devices
+# 应显示: List of devices attached
+#         XXXXXXXX    device
+
+# 常见问题：
+# - 显示 unauthorized：在手机上点击"允许 USB 调试"授权弹窗
+# - 设备未显示：检查 USB 调试是否启用，尝试更换数据线或 USB 接口
+# - 部分机型可能需要重启设备才能生效
 ```
 
-**WiFi 连接（无需 USB 线）：**
-
-适用于 Android 11+ 的无线调试功能：
+#### 方式二：WiFi 连接（Android 11+）
 
 ```bash
 # 1. 在手机上启用无线调试
@@ -586,9 +505,7 @@ adb devices
 # 应显示: 192.168.1.100:41589    device
 ```
 
-**通过 USB 启用 TCP/IP 模式（Android 7+）：**
-
-如果设备不支持无线调试，可以先通过 USB 启用网络调试：
+#### 方式三：通过 USB 启用 TCP/IP 模式（Android 7+）
 
 ```bash
 # 1. 通过 USB 连接设备
@@ -615,7 +532,7 @@ adb devices
 - **连接断开**：WiFi 可能断开，使用 `adb connect <IP>:5555` 重新连接
 - **设备重启后失效**：部分设备重启后会禁用 TCP/IP，需通过 USB 重新启用
 
-### 安装 ADB Keyboard
+### 三、安装 ADB Keyboard
 
 文本输入功能需要 ADB Keyboard：
 
@@ -624,11 +541,80 @@ adb devices
 wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
 adb install -r ADBKeyboard.apk
 
-# 在设备上启用
-# 设置 → 语言和输入法 → 当前键盘 → 选择 ADB Keyboard
+# 方式 1：通过命令启用（推荐）
+adb shell ime enable com.android.adbkeyboard/.AdbIME
+
+# 方式 2：在设备上手动启用
+# 设置 → 语言和输入法 → 虚拟键盘 → 启用 ADB Keyboard
 ```
 
-### 使用示例
+### 四、视觉模型配置
+
+AutoGLM 需要视觉模型来理解手机屏幕。您可以选择本地部署或使用云端服务。
+
+#### 选项 1：本地部署（需要 GPU）
+
+**安装 vLLM：**
+
+```bash
+pip install vllm
+```
+
+**启动视觉模型服务：**
+
+```bash
+python3 -m vllm.entrypoints.openai.api_server \
+  --served-model-name autoglm-phone-9b \
+  --allowed-local-media-path / \
+  --mm-encoder-tp-mode data \
+  --mm_processor_cache_type shm \
+  --mm_processor_kwargs '{"max_pixels":5000000}' \
+  --max-model-len 25480 \
+  --chat-template-content-format string \
+  --limit-mm-per-prompt '{"image":10}' \
+  --model zai-org/AutoGLM-Phone-9B \
+  --port 8000
+```
+
+**配置环境变量：**
+
+```bash
+AUTOGLM_VISION_MODEL_URL=http://localhost:8000/v1
+AUTOGLM_VISION_MODEL_NAME=autoglm-phone-9b
+AUTOGLM_VISION_API_KEY=EMPTY
+```
+
+#### 选项 2：使用第三方云端服务（推荐 - 无需 GPU）
+
+**2.1 智谱 BigModel**
+
+- **文档**: https://docs.bigmodel.cn/cn/api/introduction
+- **申请 API Key**: 在智谱平台注册并申请
+
+**配置环境变量：**
+
+```bash
+AUTOGLM_VISION_MODEL_URL=https://open.bigmodel.cn/api/paas/v4
+AUTOGLM_VISION_MODEL_NAME=autoglm-phone
+AUTOGLM_VISION_API_KEY=your-zhipu-api-key
+```
+
+**2.2 ModelScope（魔搭社区）**
+
+- **文档**: https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B
+- **申请 API Key**: 在 ModelScope 平台注册并申请
+
+**配置环境变量：**
+
+```bash
+AUTOGLM_VISION_MODEL_URL=https://api-inference.modelscope.cn/v1
+AUTOGLM_VISION_MODEL_NAME=ZhipuAI/AutoGLM-Phone-9B
+AUTOGLM_VISION_API_KEY=your-modelscope-api-key
+```
+
+### 五、使用示例
+
+完成以上配置后，即可开始使用：
 
 ```bash
 $ deepagents
@@ -643,7 +629,7 @@ Agent：我将使用 phone_task 工具打开地图应用并搜索咖啡店...
 Agent：我将使用 phone_task 工具打开微信、找到张三的聊天并发送消息...
 ```
 
-### 支持的应用
+### 六、支持的应用
 
 AutoGLM 内置了 50+ 款主流应用配置：
 
