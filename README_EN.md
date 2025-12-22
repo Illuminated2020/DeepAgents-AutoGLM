@@ -10,17 +10,17 @@ Compared to the original [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM)
 
 - **🔗 Capability Composition**: AutoGLM seamlessly integrates with Web search, Shell, skills system, and memory system, enabling full automation of "search information → analyze decisions → phone operations"
 - **🧠 Intelligent Division of Labor**: Main Agent handles task planning and complex decision-making, while sub-Agent `phone_task` focuses on phone operation execution with clear responsibility boundaries
-- **🎯 Unified Entry Point**: All features managed through a single CLI and `.env` configuration file, no need to configure each capability separately
+- **🎯 Fine-Grained Control**: Leverage Anthropic's [Agent SKILL](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills) to create customized operation workflows for specific apps (like Rednote, QQ), enabling automation of complex scenarios
 - **🔌 Modular Extension**: Pluggable design, AutoGLM as an optional middleware, enabled on-demand via environment variables
 
 **Typical Scenario Example**:
 ```bash
 $ deepagents
-> Search for the latest AI news, summarize it in Xiaohongshu style, and post it on Xiaohongshu
+> Search for the latest AI news, summarize it in Rednote style, and post it on Rednote
 
 # Execution flow:
 # 1. web_search searches for AI news
-# 2. LLM analyzes and generates Xiaohongshu content
+# 2. LLM analyzes and generates Rednote content
 # 3. Main Agent plans posting workflow via xiaohongshu-post skill
 # 4. Invokes sub-agent phone_task to execute phone operations (open app, input, publish)
 # 5. agent.md records posting history
@@ -35,6 +35,13 @@ $ deepagents
 - **Vision-Guided Control** (Optional): Use vision-language models to understand and operate phone GUI
 
 <img src="./DA-AutoGLM.png" alt="deep agent" width="100%"/>
+
+## 📺 Live Demos
+
+See DeepAgents-AutoGLM in action with real-world use cases:
+
+- 🎨 **[Rednote Auto-Posting Demo](http://xhslink.com/o/FdRsaQQpUz)** - Demonstrates how the Agent automatically searches content, generates posts, and publishes to Rednote
+- 💬 **[QQ Auto-Reply Demo](http://xhslink.com/o/6v5umdBoznW)** - Shows how to intelligently identify and automatically reply to unread QQ messages
 
 ## 🚀 Quick Start
 
@@ -121,7 +128,15 @@ uv pip install -e ".[autoglm]"
 
 - **macOS:** `brew install android-platform-tools`
 - **Ubuntu/Debian:** `sudo apt-get install android-tools-adb`
-- **Windows:** Download from [official website](https://developer.android.com/tools/releases/platform-tools) and configure environment variables
+- **Windows:** 
+  1. Download platform-tools from [official website](https://developer.android.com/tools/releases/platform-tools)
+  2. Extract to a custom path (e.g., `C:\platform-tools`)
+  3. Configure environment variables:
+     - Right-click `This PC` → `Properties` → `Advanced system settings` → `Environment Variables`
+     - Find `Path` in `System variables`, click `Edit`
+     - Click `New`, add the full path to platform-tools (e.g., `C:\platform-tools`)
+     - Click `OK` to save
+
 
 Verify installation:
 ```bash
@@ -142,23 +157,43 @@ adb version  # Should output version information
 adb devices
 # Should display: XXXXXXXX    device
 # If showing unauthorized, tap "Allow USB debugging" on your phone
-
-# 4. Install ADB Keyboard (for text input)
-wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
-adb install -r ADBKeyboard.apk
-adb shell ime enable com.android.adbkeyboard/.AdbIME
 ```
 
+**4. Install ADB Keyboard (for text input):**
+
+Download and install [ADBKeyboard.apk](https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk):
+
+- **Method 1: Install via ADB** (execute on computer)
+  ```bash
+  wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
+  adb install -r ADBKeyboard.apk
+  ```
+
+- **Method 2: Manual installation**
+  - Open the download link in your phone's browser
+  - Download the APK file and tap to install
+  - Allow installation from this source
+
+**Enable ADB Keyboard:**
+
+- **Method 1: Manual enable**
+  - Go to `Settings` → `Language and input` → `Virtual keyboard` or `Keyboard list`
+  - Find and enable `ADB Keyboard`
+
+- **Method 2: Enable via command** (execute on computer)
+  ```bash
+  adb shell ime enable com.android.adbkeyboard/.AdbIME
+  ```
 **4. Configure environment variables and vision model:**
 
 For detailed configuration steps (including environment variables, WiFi connection, model deployment, etc.), please refer to the [AutoGLM Configuration Details](#autoglm-configuration-details) section.
 
 **Available models:**
 
-| Model | Download Links | Description |
-|-------|----------------|-------------|
-| AutoGLM-Phone-9B | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B) | Optimized for Chinese phone applications |
-| AutoGLM-Phone-9B-Multilingual | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B-Multilingual)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B-Multilingual) | Supports English and other multilingual scenarios |
+| Model                          | Download Links                                                                                                                                                        | Description                                    |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| AutoGLM-Phone-9B               | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B)                           | Optimized for Chinese phone applications       |
+| AutoGLM-Phone-9B-Multilingual  | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B-Multilingual)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B-Multilingual) | Supports English and other multilingual scenarios |
 
 ## Built-in Tools
 
@@ -343,7 +378,7 @@ Skills are reusable Agent capabilities that provide specialized workflows and do
 
 - **web-research** - Structured web research workflow with planning, parallel delegation, and synthesis
 - **langgraph-docs** - LangGraph documentation lookup and guidance
-- **xiaohongshu-posting** - Xiaohongshu (Little Red Book) automated posting workflow, supports both short notes and long articles
+- **xiaohongshu-posting** - Rednote (Little Red Book) automated posting workflow, supports both short notes and long articles
 
 To use example skills globally in the default Agent, simply copy them to your Agent's global or project-level skills directory:
 
@@ -623,7 +658,7 @@ AutoGLM has built-in configurations for 50+ mainstream apps:
 | Video & Entertainment | Douyin, Kuaishou, Bilibili, iQIYI, Tencent Video |
 | Music & Audio | NetEase Cloud Music, QQ Music, Ximalaya |
 | Life Services | Dianping, Alipay |
-| Content Communities | Xiaohongshu, Zhihu, Douban |
+| Content Communities | Rednote, Zhihu, Douban |
 | System Apps | Phone, Messages, Camera, Settings, Browser |
 
 ## Technical Architecture
@@ -698,7 +733,7 @@ deepagents
 ### ✅ Completed Features
 
 - ✅ AutoGLM middleware integration (vision-guided phone control)
-- ✅ Xiaohongshu (Little Red Book) auto-posting skill
+- ✅ Rednote (Little Red Book) auto-posting skill
 - ✅ Two-level interrupt mechanism (Ctrl+C graceful exit)
 - ✅ Long text input support
 

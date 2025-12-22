@@ -10,7 +10,7 @@
 
 - **🔗 能力组合**：AutoGLM 与 Web 搜索、Shell、技能系统、记忆系统无缝协同，实现"搜索信息 → 分析决策 → 手机操作"全流程自动化
 - **🧠 智能分工**：主 Agent 负责任务规划和复杂决策，子Agent `phone_task` 专注手机操作执行，职责边界清晰
-- **🎯 统一入口**：所有功能通过单一 CLI 和 `.env` 配置文件管理，无需为每个能力单独配置
+- **🎯 精细化操作**：利用 Anthropic 提出的 [Agent SKILL](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills)，可为特定应用（如小红书、QQ）定制精细化的操作流程，实现复杂场景的自动化任务
 - **🔌 模块化扩展**：可插拔设计，AutoGLM 作为可选中间件，通过环境变量按需启用
 
 **典型场景示例**：
@@ -37,6 +37,13 @@ $ deepagents
 - **视觉引导控制**（可选）: 使用视觉-语言模型理解和操作手机 GUI
 
 <img src="./DA-AutoGLM.png" alt="deep agent" width="100%"/>
+
+## 📺 实际演示
+
+查看 DeepAgents-AutoGLM 在真实场景中的实际应用效果：
+
+- 🎨 **[小红书自动发布演示](http://xhslink.com/o/FdRsaQQpUz)** - 展示如何使用 Agent 自动搜索内容、生成文案并发布到小红书
+- 💬 **[QQ 未读消息自动回复演示](http://xhslink.com/o/6v5umdBoznW)** - 展示如何智能识别并自动回复 QQ 未读消息
 
 ## 🚀 快速开始
 
@@ -128,7 +135,14 @@ uv pip install -e ".[autoglm]"
 
 - **macOS：** `brew install android-platform-tools`
 - **Ubuntu/Debian：** `sudo apt-get install android-tools-adb`
-- **Windows：** 从 [官方网站](https://developer.android.com/tools/releases/platform-tools) 下载并配置环境变量
+- **Windows：** 
+1. 从 [官方网站](https://developer.android.com/tools/releases/platform-tools) 下载 platform-tools
+2. 解压到自定义路径（如 `C:\platform-tools`）
+3. 配置环境变量：
+   - 右键 `此电脑` → `属性` → `高级系统设置` → `环境变量`
+   - 在 `系统变量` 中找到 `Path`，点击 `编辑`
+   - 点击 `新建`，添加 platform-tools 的完整路径（如 `C:\platform-tools`）
+   - 点击 `确定` 保存
 
 验证安装：
 ```bash
@@ -149,13 +163,33 @@ adb version  # 应输出版本信息
 adb devices
 # 应显示: XXXXXXXX    device
 # 如显示 unauthorized，在手机上点击"允许 USB 调试"
-
-# 4. 安装 ADB Keyboard（用于文本输入）
-wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
-adb install -r ADBKeyboard.apk
-adb shell ime enable com.android.adbkeyboard/.AdbIME
 ```
 
+**4. 安装 ADB Keyboard（用于文本输入）：**
+
+下载并安装 [ADBKeyboard.apk](https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk)：
+
+- **方式 1：通过 ADB 安装**（电脑端执行）
+  ```bash
+  wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
+  adb install -r ADBKeyboard.apk
+  ```
+
+- **方式 2：手动安装**
+  - 在手机浏览器中打开下载链接
+  - 下载 APK 文件后点击安装
+  - 允许来自此来源的应用安装
+
+**启用 ADB Keyboard：**
+
+- **方式 1：手动启用**
+  - 进入 `设置` → `语言和输入法` → `虚拟键盘` 或 `键盘列表`
+  - 找到并启用 `ADB Keyboard`
+
+- **方式 2：命令启用**（电脑端执行）
+  ```bash
+  adb shell ime enable com.android.adbkeyboard/.AdbIME
+  ```
 **4. 配置环境变量和视觉模型：**
 
 详细配置步骤（包括环境变量、WiFi 连接、模型部署等）请参考 [AutoGLM 配置详解](#autoglm-配置详解) 章节。
@@ -164,8 +198,8 @@ adb shell ime enable com.android.adbkeyboard/.AdbIME
 
 | 模型                          | 下载链接                                                                                                                                                              | 说明                 |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| AutoGLM-Phone-9B              | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B) `<br>`[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B)                           | 针对中文手机应用优化 |
-| AutoGLM-Phone-9B-Multilingual | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B-Multilingual) `<br>`[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B-Multilingual) | 支持英语等多语言场景 |
+| AutoGLM-Phone-9B              | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B)                           | 针对中文手机应用优化 |
+| AutoGLM-Phone-9B-Multilingual | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B-Multilingual)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B-Multilingual) | 支持英语等多语言场景 |
 
 ## 内置工具
 
