@@ -4,7 +4,7 @@ Android GUI automation middleware for deepagents-cli using vision-language model
 
 ## Overview
 
-AutoGLM middleware integrates [Open-AutoGLM](https://github.com/THUDM/AutoGLM)'s phone agent capabilities into deepagents-cli, enabling autonomous Android device control through vision-guided automation.
+AutoGLM middleware integrates [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM)'s phone agent capabilities into deepagents-cli, enabling autonomous Android device control through vision-guided automation.
 
 ### Features
 
@@ -499,10 +499,10 @@ This normalization allows the model to work across different screen sizes.
 
 ## Source Attribution
 
-This middleware is adapted from the [Open-AutoGLM](https://github.com/THUDM/AutoGLM) project by Tsinghua University.
+This middleware is adapted from the [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) project by Tsinghua University.
 
 **Original Project:**
-- Repository: https://github.com/THUDM/AutoGLM
+- Repository: https://github.com/zai-org/Open-AutoGLM
 - License: Apache 2.0
 - Model: AutoGLM-Phone-9B (based on GLM-4.1V-9B-Thinking)
 
@@ -530,7 +530,7 @@ To contribute to AutoGLM middleware:
 
 For issues and questions:
 - deepagents-cli: https://github.com/anthropics/deepagents
-- Open-AutoGLM: https://github.com/THUDM/AutoGLM
+- Open-AutoGLM: https://github.com/zai-org/Open-AutoGLM
 
 ## License
 

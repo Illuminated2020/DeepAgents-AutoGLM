@@ -4,7 +4,7 @@ This module contains system prompts that define the agent's behavior and availab
 The prompts instruct the vision-language model on how to interact with Android devices.
 
 Source: Adapted from Open-AutoGLM project
-Original: https://github.com/THUDM/AutoGLM
+Original: https://github.com/zai-org/Open-AutoGLM
 Files: phone_agent/config/prompts.py, phone_agent/config/prompts_en.py
 
 The Chinese prompt (PHONE_AGENT_PROMPT_ZH) is the comprehensive version with all 18 action types

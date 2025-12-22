@@ -6,7 +6,7 @@ The model outputs responses in a two-part format:
 2. Action command (actual operation to execute)
 
 Source: Adapted from Open-AutoGLM project
-Original: https://github.com/THUDM/AutoGLM
+Original: https://github.com/zai-org/Open-AutoGLM
 Files: phone_agent/model/client.py, phone_agent/actions/handler.py
 """
 

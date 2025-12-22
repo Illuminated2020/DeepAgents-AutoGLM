@@ -4,7 +4,7 @@ This module provides mappings between user-friendly app names and their Android 
 Used by the phone agent to launch apps using the Launch action.
 
 Source: Adapted from Open-AutoGLM project
-Original: https://github.com/THUDM/AutoGLM
+Original: https://github.com/zai-org/Open-AutoGLM
 File: phone_agent/config/apps.py
 
 The mapping includes:
