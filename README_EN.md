@@ -736,6 +736,7 @@ deepagents
 - ✅ Rednote (Little Red Book) auto-posting skill
 - ✅ Two-level interrupt mechanism (Ctrl+C graceful exit)
 - ✅ Long text input support
+- ✅ Improved AutoGLM interrupt handling mechanism
 
 ### 🚧 In Progress / 📋 Planned
 
