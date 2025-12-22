@@ -501,10 +501,12 @@ def type_text(text: str, device_id: str | None = None, verbose: bool = False) ->
 
     # Maximum safe characters per chunk to avoid Binder transaction limits
     # Conservative value to ensure reliability across different devices
-    MAX_CHUNK_SIZE = 500
+    # Reduced from 500 to 300 to improve reliability with long text
+    MAX_CHUNK_SIZE = 300
 
     # Increased delay for better reliability with long text
-    CHUNK_DELAY = 0.3  # 300ms between chunks (doubled from 150ms)
+    # Increased from 0.3s to 0.8s to ensure each chunk is fully processed
+    CHUNK_DELAY = 0.8  # 800ms between chunks for better reliability
 
     # Short text: use original single-broadcast approach
     if len(text) <= MAX_CHUNK_SIZE:

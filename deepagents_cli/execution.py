@@ -27,7 +27,7 @@ from deepagents_cli.config import COLORS, console
 from deepagents_cli.file_ops import FileOpTracker, build_approval_preview
 from deepagents_cli.image_utils import create_multimodal_content
 from deepagents_cli.input import ImageTracker, parse_file_mentions
-from deepagents_cli.middleware.autoglm_middleware import ForceExitException
+# ForceExitException removed - now using only KeyboardInterrupt for interruptions
 from deepagents_cli.ui import (
     TokenTracker,
     format_tool_display,
@@ -694,49 +694,6 @@ async def execute_task(
             console.print(f"[red]Warning: Failed to update agent state: {e}[/red]\n")
 
         return
-
-    except ForceExitException:
-        # User pressed Ctrl+C twice - force exit with comprehensive cleanup
-        if spinner_active:
-            status.stop()
-        console.print("\n[yellow]Force exit requested[/yellow]")
-        console.print("Performing comprehensive cleanup...", style="dim")
-
-        # Cancel all running async tasks
-        try:
-            current_task = asyncio.current_task()
-            all_tasks = [t for t in asyncio.all_tasks() if t is not current_task and not t.done()]
-
-            if all_tasks:
-                console.print(f"Cancelling {len(all_tasks)} async tasks...", style="dim")
-                for task in all_tasks:
-                    task.cancel()
-
-                # Wait for all tasks to complete cancellation
-                await asyncio.gather(*all_tasks, return_exceptions=True)
-                console.print("✓ All async tasks cancelled", style="dim")
-        except Exception as e:
-            console.print(f"[yellow]Warning: Task cancellation partial: {e}[/yellow]")
-
-        # Update agent state
-        try:
-            await agent.aupdate_state(
-                config=config,
-                values={
-                    "messages": [
-                        HumanMessage(
-                            content="[User force exited with second Ctrl+C. All tasks cancelled.]"
-                        )
-                    ]
-                },
-            )
-            console.print("✓ Agent state saved", style="dim")
-        except Exception as e:
-            console.print(f"[yellow]Warning: Failed to save agent state: {e}[/yellow]")
-
-        # Re-raise to propagate to main.py for final cleanup
-        console.print("Exiting...\n", style="dim")
-        raise
 
     except KeyboardInterrupt:
         # User pressed Ctrl+C - clean up and exit gracefully

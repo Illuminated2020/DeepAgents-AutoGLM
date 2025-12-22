@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import os
 import signal
 import tempfile
 import threading
@@ -31,8 +30,11 @@ from typing import Any
 from langchain.agents.middleware.types import AgentMiddleware, AgentState, ModelRequest, ModelResponse
 from langchain.tools import ToolRuntime, tool
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.messages import ToolMessage
 from langgraph.types import Command
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
 
 from deepagents_cli.middleware.autoglm import action_parser, adb_controller, apps, prompts
 
@@ -80,15 +82,8 @@ phone_task (Phone Operator):
 """
 
 
-class ForceExitException(Exception):
-    """Exception raised when user forces exit with second Ctrl+C.
-
-    This exception triggers comprehensive cleanup of all async tasks
-    before exiting, avoiding event loop errors while ensuring resources
-    are properly released.
-    """
-
-    pass
+# ForceExitException removed - no longer needed with improved interrupt handling
+# We now use only KeyboardInterrupt which is caught and converted to ToolMessage
 
 
 @dataclass
@@ -133,34 +128,104 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
     1. phone_task: High-level tool for autonomous task execution
     2. Optional low-level tools for direct control (if expose_low_level_tools=True)
 
-    Example:
-        ```python
-        from langchain_openai import ChatOpenAI
-        from deepagents_cli.middleware.autoglm_middleware import AutoGLMMiddleware, AutoGLMConfig
+    ## Interrupt Handling
 
-        # Create vision model
-        vision_model = ChatOpenAI(
-            base_url="http://localhost:8000/v1",
-            model="autoglm-phone-9b",
-            api_key="EMPTY",
-        )
+    This middleware implements a **hybrid interrupt mechanism**:
 
-        # Create middleware
-        config = AutoGLMConfig(
-            vision_model=vision_model,
-            device_id=None,  # Use first available device
-            lang="zh",  # Chinese prompts
-            max_steps=50,
-            expose_low_level_tools=True,  # Expose direct ADB tools
-        )
-        middleware = AutoGLMMiddleware(config)
+    1. **Execution-time interruption (Ctrl+C)**:
+       - User can press Ctrl+C during phone_task execution to cancel
+       - First Ctrl+C: Graceful cancellation (waits for current operation)
+       - Second Ctrl+C: Immediate cancellation (cancels ongoing model call)
+       - Returns ToolMessage with status="error" (agent can handle gracefully)
 
-        # Use in agent
-        agent = create_deep_agent(
-            model=main_model,
-            middleware=[middleware],
-        )
-        ```
+    2. **Pre-execution approval (HumanInTheLoopMiddleware)**:
+       - Optional: Require approval before executing phone_task
+       - Integrates with deepagents' standard interrupt mechanism
+       - User can approve, reject, or edit task parameters
+
+    ## Basic Usage Example
+
+    ```python
+    from langchain_openai import ChatOpenAI
+    from deepagents_cli.middleware.autoglm_middleware import AutoGLMMiddleware, AutoGLMConfig
+
+    # Create vision model
+    vision_model = ChatOpenAI(
+        base_url="http://localhost:8000/v1",
+        model="autoglm-phone-9b",
+        api_key="EMPTY",
+    )
+
+    # Create middleware
+    config = AutoGLMConfig(
+        vision_model=vision_model,
+        device_id=None,  # Use first available device
+        lang="zh",  # Chinese prompts
+        max_steps=50,
+        expose_low_level_tools=False,  # Only expose high-level phone_task
+    )
+    middleware = AutoGLMMiddleware(config)
+
+    # Use in agent
+    agent = create_deep_agent(
+        model=main_model,
+        middleware=[middleware],
+    )
+    ```
+
+    ## Advanced: Integration with HumanInTheLoopMiddleware
+
+    For sensitive operations, you can require approval before executing phone tasks:
+
+    ```python
+    from deepagents.graph import create_deep_agent
+    from deepagents_cli.middleware.autoglm_middleware import AutoGLMMiddleware, AutoGLMConfig
+
+    # Create AutoGLM middleware (same as above)
+    autoglm_middleware = AutoGLMMiddleware(config)
+
+    # Create agent with pre-execution approval for phone_task
+    agent = create_deep_agent(
+        model=main_model,
+        middleware=[autoglm_middleware],
+        interrupt_on={
+            # Require approval before executing phone tasks
+            "phone_task": {
+                "allowed_decisions": ["approve", "reject", "edit"],
+                "description": lambda tc, state, rt: (
+                    f"📱 Phone Task Approval Required\\n\\n"
+                    f"Task: {tc['args']['task']}\\n\\n"
+                    f"This will control the connected Android device.\\n"
+                    f"Approve to proceed, reject to cancel, or edit to modify the task."
+                )
+            },
+            # Optional: Also require approval for low-level tools
+            "phone_tap": True,  # All decisions allowed
+            "phone_swipe": True,
+            "phone_type": {
+                "allowed_decisions": ["approve", "reject"],  # No editing
+                "description": "Text input requires approval"
+            }
+        }
+    )
+    ```
+
+    ## Interrupt Mechanism Comparison
+
+    | Feature | Ctrl+C (Built-in) | HumanInTheLoopMiddleware |
+    |---------|-------------------|--------------------------|
+    | When | During execution | Before execution |
+    | Use case | Cancel running task | Approve before starting |
+    | Resumable | No (task cancelled) | Yes (with Command) |
+    | Framework integration | Custom implementation | Standard deepagents |
+    | Concurrency safe | Yes (with lock) | Yes (framework managed) |
+
+    ## Best Practices
+
+    1. **Use Ctrl+C for emergency stops**: Cancel tasks that are taking too long
+    2. **Use HITL for sensitive operations**: Require approval for irreversible actions
+    3. **Combine both**: HITL for approval + Ctrl+C for cancellation during execution
+    4. **Avoid concurrent tasks**: Only one phone_task should run at a time (enforced by lock)
     """
 
     def __init__(self, config: AutoGLMConfig) -> None:
@@ -194,9 +259,21 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             self.system_prompt = prompts.get_phone_agent_prompt_zh()
 
         # Interrupt handling
+        # Note: These are instance-level variables, so concurrent phone_task calls
+        # will share the same interrupt state. Since phone_task controls a physical
+        # device, concurrent execution is not recommended. We use a lock to prevent it.
+        self._task_lock = threading.Lock()
         self._interrupt_flag = threading.Event()
         self._interrupt_count = 0  # Track number of Ctrl+C presses
+        self._last_interrupt_time = 0.0  # Track timestamp of last Ctrl+C
+        self._interrupt_reset_timeout = 2.0  # Reset count after 2 seconds
+        self._phone_task_active = False  # Flag to track if phone_task is running
+        self._original_sigint_handler = None  # Store original signal handler
         self._original_ime = None  # Track original keyboard for cleanup
+        self._active_task_count = 0  # Track number of active tasks
+
+        # Rich console for beautiful output
+        self._console = Console()
 
         # Build tool list
         self.tools = []
@@ -219,8 +296,12 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         Raises:
             RuntimeError: If ADB is not available or no devices are connected.
         """
-        # Setup signal handler for Ctrl+C
-        self._setup_signal_handler()
+        # Setup signal handler in main thread (before any tasks start)
+        # Save original handler and install custom one
+        # The custom handler will only display panels when _phone_task_active is True
+        if self._original_sigint_handler is None:
+            self._original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_DFL)
+            self._setup_signal_handler()
 
         # Check ADB availability
         if not adb_controller.check_adb_available():
@@ -260,53 +341,98 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         This allows the phone_task to be interrupted with Ctrl+C and clean up properly.
         Supports two-level interruption:
         - First Ctrl+C: Graceful cancellation (waits for current operation)
-        - Second Ctrl+C: Force exit without event loop errors
+        - Second Ctrl+C: Immediate cancellation (cancels model call in progress)
+
+        IMPORTANT: Signal handlers should NEVER raise exceptions directly.
+        Instead, we set flags that are checked in the main async loop.
         """
 
         def signal_handler(signum: int, frame: Any) -> None:
             """Handle interrupt signal with two-level graceful interruption.
 
-            First Ctrl+C: Set interrupt flag and wait for graceful cleanup.
-            Second Ctrl+C: Force exit immediately using os._exit() to avoid event loop errors.
+            First Ctrl+C: Set interrupt flag for graceful cleanup at next checkpoint.
+            Second Ctrl+C (within 2 seconds): Set flag for immediate cancellation.
+
+            Note: We do NOT raise exceptions here as that's unsafe in signal handlers.
+            The main loop checks _interrupt_flag and raises KeyboardInterrupt at safe points.
+
+            IMPORTANT: Only responds when phone_task is active to avoid interfering
+            with the main agent's Ctrl+C handling.
             """
             # signum and frame are required by signal.signal but not used
             _ = (signum, frame)
 
+            # Only handle interrupt if phone_task is currently running
+            if not self._phone_task_active:
+                # Not in phone_task - call original handler (usually from main.py or execution.py)
+                # This allows the main agent to handle Ctrl+C gracefully
+                if self._original_sigint_handler and callable(self._original_sigint_handler):
+                    self._original_sigint_handler(signum, frame)
+                else:
+                    # Fallback to default handler
+                    signal.default_int_handler(signum, frame)
+                return
+
+            # Time-based interrupt detection: reset count if too much time has passed
+            current_time = time.time()
+            if current_time - self._last_interrupt_time > self._interrupt_reset_timeout:
+                # More than 2 seconds since last interrupt - reset counter
+                self._interrupt_count = 0
+
             self._interrupt_count += 1
+            self._last_interrupt_time = current_time
 
             if self._interrupt_count == 1:
                 # First Ctrl+C: Graceful cancellation
-                print("\n" + "="*60)
-                print("⚠️  INTERRUPT SIGNAL RECEIVED (Ctrl+C)")
-                print("="*60)
-                print("Cancelling task... Please wait for current operation to complete.")
-                print("(This may take a few seconds if waiting for model response)")
-                print("="*60 + "\n")
+                message = Text()
+                message.append("Cancelling task gracefully...\n\n", style="bold yellow")
+                message.append("• ", style="dim")
+                message.append("Waiting for current operation to complete\n", style="white")
+                message.append("• ", style="dim")
+                message.append("Press ", style="white")
+                message.append("Ctrl+C", style="bold cyan")
+                message.append(" again to cancel immediately", style="white")
+
+                self._console.print()
+                self._console.print(
+                    Panel(
+                        message,
+                        title="[bold yellow]⚠️  Task Interrupted[/bold yellow]",
+                        border_style="yellow",
+                        padding=(1, 2),
+                        width=70,  # Limit width for better appearance
+                    )
+                )
 
                 # Set the interrupt flag for phone_task internal checking
                 # phone_task will detect this and raise KeyboardInterrupt at a safe point
                 self._interrupt_flag.set()
 
             else:
-                # Second Ctrl+C: Trigger comprehensive cleanup via ForceExitException
-                print("\n" + "="*60)
-                print("⚠️  FORCE EXIT (Second Ctrl+C)")
-                print("="*60)
-                print("Initiating comprehensive cleanup...")
-                print("(Cancelling all async tasks and cleaning up resources)")
-                print("="*60 + "\n")
+                # Second Ctrl+C: Immediate cancellation
+                message = Text()
+                message.append("Force cancelling...\n\n", style="bold red")
+                message.append("• ", style="dim")
+                message.append("Cancelling ongoing operations\n", style="white")
+                message.append("• ", style="dim")
+                message.append("Cleaning up resources", style="white")
 
-                # Set interrupt flag first
+                self._console.print()
+                self._console.print(
+                    Panel(
+                        message,
+                        title="[bold red]🛑 Immediate Cancellation[/bold red]",
+                        border_style="red",
+                        padding=(1, 2),
+                        width=70,  # Limit width for better appearance
+                    )
+                )
+
+                # Set interrupt flag (already set, but ensure it's set)
                 self._interrupt_flag.set()
 
-                # Raise ForceExitException to trigger comprehensive cleanup
-                # This will be caught at the top level and handle:
-                # 1. Cancelling all async tasks
-                # 2. Cleaning up phone resources
-                # 3. Closing sandbox connections
-                # 4. Saving agent state
-                # 5. Gracefully shutting down event loop
-                raise ForceExitException("User forced exit with second Ctrl+C")
+                # The main loop will detect the increased interrupt count
+                # and cancel the model call immediately
 
         # Register signal handler for SIGINT (Ctrl+C)
         signal.signal(signal.SIGINT, signal_handler)
@@ -321,24 +447,23 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             self.tools.extend(self._create_low_level_tools())
 
     def _check_interrupt(self, step: int = 0) -> None:
-        """Check if interrupt flag is set and raise appropriate exception.
+        """Check if interrupt flag is set and raise KeyboardInterrupt.
+
+        This is called at safe checkpoints in the task execution loop.
 
         Args:
             step: Current step number (for error messages)
 
         Raises:
-            ForceExitException: If second Ctrl+C was pressed
-            KeyboardInterrupt: If first Ctrl+C was pressed
+            KeyboardInterrupt: If Ctrl+C was pressed (will be caught and converted to ToolMessage)
         """
         if self._interrupt_flag.is_set():
+            # Clean up resources before interrupting
             self._cleanup_resources()
 
-            if self._interrupt_count >= 2:
-                raise ForceExitException(
-                    f"Phone task force exited at step {step} (second Ctrl+C)"
-                )
-            else:
-                raise KeyboardInterrupt()
+            # Raise KeyboardInterrupt to exit the task loop
+            # This will be caught in _execute_phone_task_async and converted to a ToolMessage
+            raise KeyboardInterrupt(f"Task interrupted at step {step}")
 
     def _create_phone_task_tool(self) -> Any:
         """Create the phone_task tool for autonomous task execution.
@@ -429,6 +554,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         4. Execute action via ADB
         5. Repeat until task complete or max_steps reached
 
+        IMPORTANT: Only one phone_task can run at a time since it controls a physical device.
+        Concurrent calls will be queued.
+
         Args:
             task: Task description from user.
             tool_call_id: Tool call ID for creating ToolMessage.
@@ -436,25 +564,39 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         Returns:
             ToolMessage with task result.
         """
-        if self.config.verbose:
-            print(f"\n{'='*60}")
-            print(f"Starting phone task: {task}")
-            print(f"{'='*60}\n")
+        # Acquire lock to prevent concurrent phone_task execution
+        # Since we're controlling a physical device, only one task should run at a time
+        if not self._task_lock.acquire(blocking=False):
+            # Another task is already running
+            if self.config.verbose:
+                print("\n⚠️  Another phone_task is already running. Waiting...")
 
-        # Reset interrupt flag at start of new task
-        self._interrupt_flag.clear()
-        self._original_ime = None
+            # Wait for the lock (this makes the call blocking)
+            self._task_lock.acquire()
 
-        # Initialize conversation history
-        messages = [
-            {"role": "system", "content": self.system_prompt},
-        ]
-
-        step = 0
-        last_thinking = ""
-        is_first_step = True
+        # Mark phone_task as active so signal handler will respond
+        self._phone_task_active = True
 
         try:
+            if self.config.verbose:
+                print(f"\n{'='*60}")
+                print(f"Starting phone task: {task}")
+                print(f"{'='*60}\n")
+
+            # Reset interrupt state at start of new task
+            self._interrupt_flag.clear()
+            # Note: _interrupt_count is now managed by time-based auto-reset in signal handler
+            self._original_ime = None
+            self._active_task_count += 1
+
+            # Initialize conversation history
+            messages = [
+                {"role": "system", "content": self.system_prompt},
+            ]
+
+            step = 0
+            last_thinking = ""
+            is_first_step = True
             while step < self.config.max_steps:
                 # Check for interrupt signal
                 self._check_interrupt(step)
@@ -655,20 +797,39 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             )
 
         except KeyboardInterrupt:
-            # Handle Ctrl+C - clean up resources then re-raise
+            # Handle Ctrl+C - clean up resources and return error ToolMessage
+            # Wait briefly to check if user presses Ctrl+C again (force cancel)
+            # This gives time for the second Ctrl+C to increment _interrupt_count
+            await asyncio.sleep(0.3)  # 300ms grace period for second Ctrl+C
+
+            # Check if user pressed Ctrl+C multiple times (force cancel)
+            was_force_cancelled = self._interrupt_count >= 2
+
             if self.config.verbose:
+                cancel_type = "Force Cancelled" if was_force_cancelled else "Interrupted"
                 print(f"\n{'='*60}")
-                print(f"⚠️  Task Interrupted by Ctrl+C")
+                print(f"⚠️  Task {cancel_type} by User (Ctrl+C)")
                 print(f"Cleaning up phone resources...")
+                print(f"Completed: {step} steps")
                 print(f"{'='*60}\n")
 
-            # Clean up phone resources first
+            # Clean up phone resources
             self._cleanup_resources()
 
-            # CRITICAL: Re-raise KeyboardInterrupt to propagate to outer handlers
-            # This allows execution.py and main.py to properly handle the interrupt
-            # and clean up async tasks before the event loop closes
-            raise
+            # Return ToolMessage with appropriate message
+            interrupt_type = "FORCE CANCELLED" if was_force_cancelled else "INTERRUPTED"
+            return ToolMessage(
+                content=(
+                    f"⚠️ PHONE TASK {interrupt_type} BY USER ⚠️\n\n"
+                    f"The task was {'force cancelled' if was_force_cancelled else 'cancelled'} by user request (Ctrl+C).\n"
+                    f"Completed {step} of {self.config.max_steps} steps before interruption.\n\n"
+                    f"Last status: {last_thinking if last_thinking else 'Task was interrupted early'}\n\n"
+                    f"Resources have been cleaned up. You may retry the task if needed."
+                ),
+                tool_call_id=tool_call_id,
+                name="phone_task",
+                status="error",  # Mark as error so agent knows the task didn't complete
+            )
 
         except Exception as e:
             error_msg = f"Phone task failed: {e}"
@@ -686,10 +847,15 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             )
 
         finally:
+            # Mark phone_task as inactive so signal handler won't interfere with main agent
+            self._phone_task_active = False
+
             # Ensure cleanup always runs
             self._cleanup_resources()
-            # Reset interrupt counter for next task
-            self._interrupt_count = 0
+            # Note: _interrupt_count is managed by time-based auto-reset, no manual reset needed
+            self._active_task_count = max(0, self._active_task_count - 1)
+            # Release the lock to allow next task to run
+            self._task_lock.release()
 
     def _cleanup_resources(self) -> None:
         """Clean up resources after task completion or interruption.
