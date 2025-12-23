@@ -46,7 +46,10 @@ def get_current_app(
 
         # Get active app info from WDA using activeAppInfo endpoint
         response = requests.get(
-            f"{wda_url.rstrip('/')}/wda/activeAppInfo", timeout=5, verify=False
+            f"{wda_url.rstrip('/')}/wda/activeAppInfo",
+            timeout=5,
+            verify=False,
+            proxies={'http': None, 'https': None}
         )
 
         if response.status_code == 200:
@@ -116,7 +119,7 @@ def tap(
             ]
         }
 
-        requests.post(url, json=actions, timeout=15, verify=False)
+        requests.post(url, json=actions, timeout=15, verify=False, proxies={'http': None, 'https': None})
 
         time.sleep(delay)
 
@@ -174,7 +177,7 @@ def double_tap(
             ]
         }
 
-        requests.post(url, json=actions, timeout=10, verify=False)
+        requests.post(url, json=actions, timeout=10, verify=False, proxies={'http': None, 'https': None})
 
         time.sleep(delay)
 
@@ -286,7 +289,7 @@ def swipe(
             "duration": duration,
         }
 
-        requests.post(url, json=payload, timeout=int(duration + 10), verify=False)
+        requests.post(url, json=payload, timeout=int(duration + 10), verify=False, proxies={'http': None, 'https': None})
 
         time.sleep(delay)
 
@@ -355,7 +358,7 @@ def home(
 
         url = f"{wda_url.rstrip('/')}/wda/homescreen"
 
-        requests.post(url, timeout=10, verify=False)
+        requests.post(url, timeout=10, verify=False, proxies={'http': None, 'https': None})
 
         time.sleep(delay)
 
@@ -389,7 +392,7 @@ def launch_app(
         url = _get_wda_session_url(wda_url, session_id, "wda/apps/launch")
 
         response = requests.post(
-            url, json={"bundleId": bundle_id}, timeout=10, verify=False
+            url, json={"bundleId": bundle_id}, timeout=10, verify=False, proxies={'http': None, 'https': None}
         )
 
         time.sleep(delay)
@@ -421,7 +424,7 @@ def get_screen_size(
 
         url = _get_wda_session_url(wda_url, session_id, "window/size")
 
-        response = requests.get(url, timeout=5, verify=False)
+        response = requests.get(url, timeout=5, verify=False, proxies={'http': None, 'https': None})
 
         if response.status_code == 200:
             data = response.json()
@@ -459,7 +462,7 @@ def press_button(
 
         url = f"{wda_url.rstrip('/')}/wda/pressButton"
 
-        requests.post(url, json={"name": button_name}, timeout=10, verify=False)
+        requests.post(url, json={"name": button_name}, timeout=10, verify=False, proxies={'http': None, 'https': None})
 
         time.sleep(delay)
 

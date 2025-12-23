@@ -53,6 +53,7 @@ def type_text(
             json={"value": list(text), "frequency": frequency},
             timeout=30,
             verify=False,
+            proxies={'http': None, 'https': None}
         )
 
         if response.status_code not in (200, 201):
@@ -87,7 +88,7 @@ def clear_text(
         # First, try to get the active element
         url = _get_wda_session_url(wda_url, session_id, "element/active")
 
-        response = requests.get(url, timeout=10, verify=False)
+        response = requests.get(url, timeout=10, verify=False, proxies={'http': None, 'https': None})
 
         if response.status_code == 200:
             data = response.json()
@@ -100,7 +101,7 @@ def clear_text(
                 clear_url = _get_wda_session_url(
                     wda_url, session_id, f"element/{element_id}/clear"
                 )
-                requests.post(clear_url, timeout=10, verify=False)
+                requests.post(clear_url, timeout=10, verify=False, proxies={'http': None, 'https': None})
                 return
 
         # Fallback: send backspace commands
@@ -137,6 +138,7 @@ def _clear_with_backspace(
             json={"value": [backspace_char] * max_backspaces},
             timeout=10,
             verify=False,
+            proxies={'http': None, 'https': None}
         )
 
     except Exception as e:
@@ -165,7 +167,7 @@ def send_keys(
 
         url = _get_wda_session_url(wda_url, session_id, "wda/keys")
 
-        requests.post(url, json={"value": keys}, timeout=10, verify=False)
+        requests.post(url, json={"value": keys}, timeout=10, verify=False, proxies={'http': None, 'https': None})
 
     except ImportError:
         print("Error: requests library required. Install: pip install requests")
@@ -206,7 +208,7 @@ def hide_keyboard(
 
         url = f"{wda_url.rstrip('/')}/wda/keyboard/dismiss"
 
-        requests.post(url, timeout=10, verify=False)
+        requests.post(url, timeout=10, verify=False, proxies={'http': None, 'https': None})
 
     except ImportError:
         print("Error: requests library required. Install: pip install requests")
@@ -233,7 +235,7 @@ def is_keyboard_shown(
 
         url = _get_wda_session_url(wda_url, session_id, "wda/keyboard/shown")
 
-        response = requests.get(url, timeout=5, verify=False)
+        response = requests.get(url, timeout=5, verify=False, proxies={'http': None, 'https': None})
 
         if response.status_code == 200:
             data = response.json()
@@ -272,6 +274,7 @@ def set_pasteboard(
             json={"content": text, "contentType": "plaintext"},
             timeout=10,
             verify=False,
+            proxies={'http': None, 'https': None}
         )
 
     except ImportError:
@@ -297,7 +300,7 @@ def get_pasteboard(
 
         url = f"{wda_url.rstrip('/')}/wda/getPasteboard"
 
-        response = requests.post(url, timeout=10, verify=False)
+        response = requests.post(url, timeout=10, verify=False, proxies={'http': None, 'https': None})
 
         if response.status_code == 200:
             data = response.json()

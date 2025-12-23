@@ -206,7 +206,7 @@ class XCTestConnection:
             import requests
 
             response = requests.get(
-                f"{self.wda_url}/status", timeout=timeout, verify=False
+                f"{self.wda_url}/status", timeout=timeout, verify=False, proxies={'http': None, 'https': None}
             )
             return response.status_code == 200
         except ImportError:
@@ -232,6 +232,7 @@ class XCTestConnection:
                 json={"capabilities": {}},
                 timeout=30,
                 verify=False,
+                proxies={'http': None, 'https': None}
             )
 
             if response.status_code in (200, 201):
@@ -261,7 +262,7 @@ class XCTestConnection:
         try:
             import requests
 
-            response = requests.get(f"{self.wda_url}/status", timeout=5, verify=False)
+            response = requests.get(f"{self.wda_url}/status", timeout=5, verify=False, proxies={'http': None, 'https': None})
 
             if response.status_code == 200:
                 return response.json()

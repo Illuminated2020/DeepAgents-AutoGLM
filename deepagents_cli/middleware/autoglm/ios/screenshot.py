@@ -76,7 +76,7 @@ def _get_screenshot_wda(
 
         url = f"{wda_url.rstrip('/')}/screenshot"
 
-        response = requests.get(url, timeout=timeout, verify=False)
+        response = requests.get(url, timeout=timeout, verify=False, proxies={'http': None, 'https': None})
 
         if response.status_code == 200:
             data = response.json()
