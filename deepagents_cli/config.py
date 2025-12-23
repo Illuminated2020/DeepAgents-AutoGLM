@@ -131,13 +131,16 @@ class Settings:
         tavily_api_key: Tavily API key if available
 
         autoglm_enabled: Whether AutoGLM middleware is enabled
+        autoglm_platform: Platform to control ("android" or "ios")
         autoglm_vision_model_url: Base URL for vision model API
         autoglm_vision_model_name: Vision model name
         autoglm_vision_api_key: API key for vision model
-        autoglm_device_id: ADB device ID (None = auto-detect)
+        autoglm_device_id: ADB device ID for Android (None = auto-detect)
+        autoglm_wda_url: WebDriverAgent URL for iOS
+        autoglm_ios_device_id: iOS device UDID (None = auto-detect)
         autoglm_lang: Language for prompts ("zh" or "en")
         autoglm_max_steps: Maximum steps for phone tasks
-        autoglm_expose_low_level_tools: Whether to expose low-level ADB tools
+        autoglm_expose_low_level_tools: Whether to expose low-level control tools
         autoglm_verbose: Enable verbose logging
     """
 
@@ -152,10 +155,13 @@ class Settings:
 
     # AutoGLM configuration
     autoglm_enabled: bool
+    autoglm_platform: str
     autoglm_vision_model_url: str | None
     autoglm_vision_model_name: str | None
     autoglm_vision_api_key: str | None
     autoglm_device_id: str | None
+    autoglm_wda_url: str
+    autoglm_ios_device_id: str | None
     autoglm_lang: str
     autoglm_max_steps: int
     autoglm_expose_low_level_tools: bool
@@ -182,10 +188,13 @@ class Settings:
 
         # Load AutoGLM configuration from environment
         autoglm_enabled = os.environ.get("AUTOGLM_ENABLED", "false").lower() == "true"
+        autoglm_platform = os.environ.get("AUTOGLM_PLATFORM", "android")
         autoglm_vision_model_url = os.environ.get("AUTOGLM_VISION_MODEL_URL")
         autoglm_vision_model_name = os.environ.get("AUTOGLM_VISION_MODEL_NAME", "autoglm-phone-9b")
         autoglm_vision_api_key = os.environ.get("AUTOGLM_VISION_API_KEY", "EMPTY")
         autoglm_device_id = os.environ.get("AUTOGLM_DEVICE_ID")
+        autoglm_wda_url = os.environ.get("AUTOGLM_WDA_URL", "http://localhost:8100")
+        autoglm_ios_device_id = os.environ.get("AUTOGLM_IOS_DEVICE_ID")
         autoglm_lang = os.environ.get("AUTOGLM_LANG", "zh")
         autoglm_max_steps = int(os.environ.get("AUTOGLM_MAX_STEPS", "100"))
         autoglm_expose_low_level_tools = (
@@ -200,10 +209,13 @@ class Settings:
             tavily_api_key=tavily_key,
             project_root=project_root,
             autoglm_enabled=autoglm_enabled,
+            autoglm_platform=autoglm_platform,
             autoglm_vision_model_url=autoglm_vision_model_url,
             autoglm_vision_model_name=autoglm_vision_model_name,
             autoglm_vision_api_key=autoglm_vision_api_key,
             autoglm_device_id=autoglm_device_id,
+            autoglm_wda_url=autoglm_wda_url,
+            autoglm_ios_device_id=autoglm_ios_device_id,
             autoglm_lang=autoglm_lang,
             autoglm_max_steps=autoglm_max_steps,
             autoglm_expose_low_level_tools=autoglm_expose_low_level_tools,

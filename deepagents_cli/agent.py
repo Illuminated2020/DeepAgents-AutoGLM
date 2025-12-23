@@ -455,7 +455,10 @@ def create_cli_agent(
             # Create AutoGLM config
             autoglm_config = AutoGLMConfig(
                 vision_model=vision_model,
+                platform=settings.autoglm_platform,
                 device_id=settings.autoglm_device_id,
+                wda_url=settings.autoglm_wda_url,
+                ios_device_id=settings.autoglm_ios_device_id,
                 lang=settings.autoglm_lang,
                 max_steps=settings.autoglm_max_steps,
                 expose_low_level_tools=settings.autoglm_expose_low_level_tools,

@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import atexit
 import os
 import sys
 from pathlib import Path
@@ -371,13 +372,16 @@ async def main(
             console.print()
             console.print("[red]❌ Sandbox creation failed[/red]")
             console.print(f"[dim]{e}[/dim]")
+            console.show_cursor(True)
             sys.exit(1)
         except KeyboardInterrupt:
             console.print("\n\n[yellow]Interrupted[/yellow]")
+            console.show_cursor(True)
             sys.exit(0)
         except Exception as e:
             console.print(f"\n[bold red]❌ Error:[/bold red] {e}\n")
             console.print_exception()
+            console.show_cursor(True)
             sys.exit(1)
 
     # Branch 2: User wants local mode (none or default)
@@ -386,11 +390,25 @@ async def main(
             await _run_agent_session(model, assistant_id, session_state, sandbox_backend=None)
         except KeyboardInterrupt:
             console.print("\n\n[yellow]Interrupted[/yellow]")
+            console.show_cursor(True)
             sys.exit(0)
         except Exception as e:
             console.print(f"\n[bold red]❌ Error:[/bold red] {e}\n")
             console.print_exception()
+            console.show_cursor(True)
             sys.exit(1)
+
+
+def _cleanup_terminal() -> None:
+    """Cleanup function to restore terminal state on exit."""
+    try:
+        # Restore cursor visibility
+        console.show_cursor(True)
+        # Print a newline to avoid prompt issues
+        print()
+    except Exception:
+        # Ignore errors during cleanup
+        pass
 
 
 def cli_main() -> None:
@@ -399,6 +417,9 @@ def cli_main() -> None:
     # https://github.com/grpc/grpc/issues/37642
     if sys.platform == "darwin":
         os.environ["GRPC_ENABLE_FORK_SUPPORT"] = "0"
+
+    # Register cleanup function to restore terminal on exit
+    atexit.register(_cleanup_terminal)
 
     # Check dependencies first
     check_cli_dependencies()
@@ -431,7 +452,14 @@ def cli_main() -> None:
     except KeyboardInterrupt:
         # Clean exit on Ctrl+C - suppress ugly traceback
         console.print("\n\n[yellow]Interrupted[/yellow]")
+        console.show_cursor(True)
         sys.exit(0)
+    except Exception as e:
+        # Catch any other exceptions to ensure cursor is restored
+        console.print(f"\n[bold red]❌ Unexpected error:[/bold red] {e}\n")
+        console.print_exception()
+        console.show_cursor(True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
