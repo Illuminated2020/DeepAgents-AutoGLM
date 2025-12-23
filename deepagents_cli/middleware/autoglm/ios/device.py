@@ -369,26 +369,37 @@ def home(
 
 
 def launch_app(
-    bundle_id: str,
+    app_name: str,
     wda_url: str = "http://localhost:8100",
     session_id: str | None = None,
     delay: float = 1.0,
+    app_packages: dict[str, str] | None = None,
 ) -> bool:
     """
-    Launch an app by bundle ID.
+    Launch an app by name.
 
     Args:
-        bundle_id: The iOS bundle ID (e.g., "com.apple.mobilesafari").
+        app_name: The app name (must be in app_packages dictionary).
         wda_url: WebDriverAgent URL.
         session_id: Optional WDA session ID.
         delay: Delay in seconds after launching.
+        app_packages: Dictionary mapping app names to bundle IDs.
 
     Returns:
-        True if app was launched, False otherwise.
+        True if app was launched, False if app not found.
     """
+    if app_packages is None:
+        # Import default iOS app packages if not provided
+        from deepagents_cli.middleware.autoglm.apps import APP_PACKAGES_IOS
+        app_packages = APP_PACKAGES_IOS
+
+    if app_name not in app_packages:
+        return False
+
     try:
         import requests
 
+        bundle_id = app_packages[app_name]
         url = _get_wda_session_url(wda_url, session_id, "wda/apps/launch")
 
         response = requests.post(

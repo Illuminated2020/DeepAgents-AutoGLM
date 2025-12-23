@@ -231,13 +231,11 @@ class IOSController:
 
     def launch_app(self, app_name: str) -> bool:
         """Launch an app on iOS device."""
-        bundle_id = self.app_packages.get(app_name)
-        if not bundle_id:
-            print(f"Warning: Unknown iOS app '{app_name}'")
-            return False
-
         return ios_device.launch_app(
-            bundle_id, wda_url=self.wda_url, session_id=self.session_id
+            app_name,
+            wda_url=self.wda_url,
+            session_id=self.session_id,
+            app_packages=self.app_packages,
         )
 
     def press_home(self) -> None:
@@ -308,6 +306,16 @@ def create_controller(config: PlatformConfig, app_packages: dict[str, str] | Non
                 f"WebDriverAgent is not running at {config.wda_url}. "
                 "Please start WebDriverAgent on the iOS device."
             )
+
+        # Auto-create WDA session if not provided
+        if config.wda_session_id is None:
+            wda_connection = ios_connection.XCTestConnection(wda_url=config.wda_url)
+            success, session_id = wda_connection.start_wda_session()
+            if success and session_id != "session_started":
+                config.wda_session_id = session_id
+                print(f"✅ Created WDA session: {session_id}")
+            else:
+                print(f"⚠️  Using default WDA session (no explicit session ID)")
 
         return IOSController(config, app_packages)
 
