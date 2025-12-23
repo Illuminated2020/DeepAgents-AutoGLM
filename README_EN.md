@@ -2,7 +2,7 @@
 
 English | [中文](./README.md)
 
-An open-source intelligent assistant based on the [deepagents](https://github.com/langchain-ai/deepagents) framework integrated with [AutoGLM](https://github.com/zai-org/Open-AutoGLM) phone control capabilities. Runs in the terminal and supports Android device automation.
+An open-source intelligent assistant based on the [deepagents](https://github.com/langchain-ai/deepagents) framework integrated with [AutoGLM](https://github.com/zai-org/Open-AutoGLM) phone control capabilities. Runs in the terminal and supports Android and iOS device automation.
 
 ## 💡 Project Highlights
 
@@ -33,7 +33,7 @@ $ deepagents
 - **Customizable Skills**: Add domain-specific capabilities through progressive disclosure skill system
 - **Persistent Memory**: Agent remembers your preferences, coding style, and project context
 - **Project-Aware**: Automatically detects project root directory and loads project-specific configurations
-- **Android Automation** (Optional): Integrated AutoGLM for intelligent phone control (tap, swipe, input, etc.)
+- **Android/iOS Automation** (Optional): Integrated AutoGLM for intelligent phone control (tap, swipe, input, etc.)
 - **Vision-Guided Control** (Optional): Use vision-language models to understand and operate phone GUI
 
 <img src="./DA-AutoGLM.png" alt="deep agent" width="100%"/>

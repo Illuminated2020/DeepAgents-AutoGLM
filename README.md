@@ -2,7 +2,7 @@
 
 [English](./README_EN.md) | 中文
 
-基于 [deepagents](https://github.com/langchain-ai/deepagents) 框架集成 [AutoGLM](https://github.com/zai-org/Open-AutoGLM) 手机控制能力的开源智能助手，可在终端中运行，并支持 Android 设备自动化控制。
+基于 [deepagents](https://github.com/langchain-ai/deepagents) 框架集成 [AutoGLM](https://github.com/zai-org/Open-AutoGLM) 手机控制能力的开源智能助手，可在终端中运行，并支持 Android 和 iOS 设备自动化控制。
 
 ## 💡 项目亮点
 
@@ -33,7 +33,7 @@ $ deepagents
 - **可定制技能**: 通过渐进式披露技能系统添加特定领域能力
 - **持久化记忆**: Agent 会记住您的偏好、编码风格和项目上下文
 - **项目感知**: 自动检测项目根目录并加载项目特定配置
-- **Android 自动化**（可选）: 集成 AutoGLM 实现智能手机控制（点击、滑动、输入等）
+- **Android/iOS 自动化**（可选）: 集成 AutoGLM 实现智能手机控制（点击、滑动、输入等）
 - **视觉引导控制**（可选）: 使用视觉-语言模型理解和操作手机 GUI
 
 <img src="./DA-AutoGLM.png" alt="deep agent" width="100%"/>
