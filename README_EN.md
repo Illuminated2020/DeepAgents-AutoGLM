@@ -740,6 +740,7 @@ deepagents
 
 ### 🚧 In Progress / 📋 Planned
 
+- 🚧 `phone_task` may need to return more specific ToolMessage when interrupted, optimization under consideration
 - 🚧 iOS device support
 - 📋 More phone operation skills (**Contributions welcome!**)
 
