@@ -6,7 +6,7 @@
 
 ## 💡 项目亮点
 
-相比原始 [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) 项目，本项目通过**中间件架构**实现以下核心优势：
+相比原始 [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) 项目，本项目基于 deepagents 框架，通过**中间件机制**集成 AutoGLM，实现以下核心优势：
 
 - **🔗 能力组合**：AutoGLM 与 Web 搜索、Shell、技能系统、记忆系统无缝协同，实现"搜索信息 → 分析决策 → 手机操作"全流程自动化
 - **🧠 智能分工**：主 Agent 负责任务规划和复杂决策，子Agent `phone_task` 专注手机操作执行，职责边界清晰

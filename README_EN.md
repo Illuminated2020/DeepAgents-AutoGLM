@@ -6,7 +6,7 @@ An open-source intelligent assistant based on the [deepagents](https://github.co
 
 ## 💡 Project Highlights
 
-Compared to the original [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) project, this project brings the following core advantages through **middleware architecture**:
+Compared to the original [Open-AutoGLM](https://github.com/zai-org/Open-AutoGLM) project, this project is based on the deepagents framework and integrates AutoGLM through **middleware mechanism**, bringing the following core advantages:
 
 - **🔗 Capability Composition**: AutoGLM seamlessly integrates with Web search, Shell, skills system, and memory system, enabling full automation of "search information → analyze decisions → phone operations"
 - **🧠 Intelligent Division of Labor**: Main Agent handles task planning and complex decision-making, while sub-Agent `phone_task` focuses on phone operation execution with clear responsibility boundaries
