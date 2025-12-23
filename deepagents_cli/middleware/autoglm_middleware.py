@@ -37,6 +37,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from deepagents_cli.middleware.autoglm import action_parser, adb_controller, apps, prompts
+from deepagents_cli.middleware.autoglm.platform import PlatformConfig, PlatformController, create_controller
 
 
 # AutoGLM Phone Task Usage Guide
@@ -94,9 +95,20 @@ class AutoGLMConfig:
     vision_model: BaseChatModel | None = None
     """Vision-language model for GUI understanding. Must support multimodal input."""
 
-    # Device settings
+    # Platform settings
+    platform: str = "android"
+    """Platform to control: 'android' or 'ios'. Default is 'android'."""
+
+    # Android device settings
     device_id: str | None = None
     """ADB device ID. If None, will use the first available device."""
+
+    # iOS device settings
+    wda_url: str = "http://localhost:8100"
+    """WebDriverAgent URL for iOS devices. Default: http://localhost:8100"""
+
+    ios_device_id: str | None = None
+    """iOS device UDID. If None, will use the first available device."""
 
     # Language settings
     lang: str = "zh"
@@ -258,6 +270,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         else:
             self.system_prompt = prompts.get_phone_agent_prompt_zh()
 
+        # Platform controller will be initialized in before_agent after system checks
+        self.controller: PlatformController | None = None
+
         # Interrupt handling
         # Note: These are instance-level variables, so concurrent phone_task calls
         # will share the same interrupt state. Since phone_task controls a physical
@@ -282,10 +297,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
     def before_agent(self, request: ModelRequest) -> ModelRequest | Command:
         """Perform system checks before agent starts.
 
-        Checks:
-        1. ADB is available on the system
-        2. At least one device is connected
-        3. ADB Keyboard is installed (if using Type actions)
+        Checks platform-specific requirements:
+        - Android: ADB availability, device connection, ADB Keyboard
+        - iOS: libimobiledevice, device connection, WebDriverAgent
 
         Args:
             request: The initial model request.
@@ -294,7 +308,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             The original request if all checks pass, or Command to fail gracefully.
 
         Raises:
-            RuntimeError: If ADB is not available or no devices are connected.
+            RuntimeError: If platform requirements are not met.
         """
         # Setup signal handler in main thread (before any tasks start)
         # Save original handler and install custom one
@@ -303,35 +317,48 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             self._original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_DFL)
             self._setup_signal_handler()
 
-        # Check ADB availability
-        if not adb_controller.check_adb_available():
-            msg = (
-                "ADB (Android Debug Bridge) is not available. "
-                "Please install ADB and ensure it's in your system PATH."
-            )
-            raise RuntimeError(msg)
+        # Create platform configuration
+        platform_config = PlatformConfig(
+            platform=self.config.platform,
+            device_id=self.config.device_id,
+            wda_url=self.config.wda_url,
+            ios_device_id=self.config.ios_device_id,
+        )
 
-        # Check device connection
-        devices = adb_controller.list_devices()
-        if not devices:
-            msg = (
-                "No Android devices connected. "
-                "Please connect a device via USB or WiFi and ensure USB debugging is enabled."
-            )
-            raise RuntimeError(msg)
+        # Get app packages for platform controller
+        app_packages = apps.APP_PACKAGES if self.config.platform == "android" else apps.APP_PACKAGES_IOS
 
-        # Set device ID if not specified
-        if self.config.device_id is None:
-            self.config.device_id = devices[0].device_id
-            if self.config.verbose:
-                print(f"Using device: {self.config.device_id} ({devices[0].model})")
+        # Create platform controller (performs all platform-specific checks)
+        try:
+            self.controller = create_controller(platform_config, app_packages)
+        except (ValueError, RuntimeError) as e:
+            raise RuntimeError(str(e)) from e
 
-        # Check ADB Keyboard (warn only, don't fail)
-        if not adb_controller.check_adb_keyboard(self.config.device_id):
-            print(
-                "Warning: ADB Keyboard not found. Text input (Type action) will not work. "
-                "Install from: https://github.com/senzhk/ADBKeyBoard"
-            )
+        # Platform-specific additional checks
+        if self.config.platform == "android":
+            # Update device_id if it was auto-selected
+            if self.config.device_id is None:
+                devices = adb_controller.list_devices()
+                self.config.device_id = devices[0].device_id
+                if self.config.verbose:
+                    print(f"Using Android device: {self.config.device_id} ({devices[0].model})")
+
+            # Check ADB Keyboard (warn only, don't fail)
+            if not adb_controller.check_adb_keyboard(self.config.device_id):
+                print(
+                    "Warning: ADB Keyboard not found. Text input (Type action) will not work. "
+                    "Install from: https://github.com/senzhk/ADBKeyBoard"
+                )
+
+        elif self.config.platform == "ios":
+            # Update device_id if it was auto-selected
+            if self.config.ios_device_id is None:
+                from deepagents_cli.middleware.autoglm.ios import connection as ios_connection
+                devices = ios_connection.list_devices()
+                self.config.ios_device_id = devices[0].device_id
+                if self.config.verbose:
+                    device_name = devices[0].device_name or "Unknown"
+                    print(f"Using iOS device: {device_name} ({devices[0].device_id[:8]}...)")
 
         return request
 
@@ -609,21 +636,21 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 # Check interrupt before expensive operations
                 self._check_interrupt(step)
 
-                # Take screenshot
-                screenshot = adb_controller.take_screenshot(self.config.device_id)
+                # Take screenshot using platform controller
+                screenshot_base64, screenshot_width, screenshot_height = self.controller.take_screenshot()
 
                 # Check interrupt after screenshot
                 self._check_interrupt(step)
 
                 # Get current app for context
-                current_app = adb_controller.get_current_app(self.config.device_id)
+                current_app = self.controller.get_current_app()
 
                 # Save screenshot for debugging
                 if self.config.screenshot_dir:
                     screenshot_path = self.screenshot_dir / f"step_{step:03d}.png"
                     with open(screenshot_path, "wb") as f:
                         # Decode base64 string to binary data for file writing
-                        f.write(base64.b64decode(screenshot.base64_data))
+                        f.write(base64.b64decode(screenshot_base64))
 
                 # Build screen info in JSON format (matching Open-AutoGLM)
                 import json
@@ -631,7 +658,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 screen_info = json.dumps({"current_app": current_app}, ensure_ascii=False)
 
                 # Build multimodal message (base64_data is already base64 encoded)
-                image_base64 = screenshot.base64_data
+                image_base64 = screenshot_base64
 
                 # Different format for first step vs subsequent steps
                 if is_first_step:
@@ -757,7 +784,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                     ]
 
                 # Execute action
-                action_result = self._execute_action(action, screenshot.width, screenshot.height)
+                action_result = self._execute_action(action, screenshot_width, screenshot_height)
 
                 # Check interrupt after action execution
                 self._check_interrupt(step)
@@ -878,7 +905,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
     def _execute_action(
         self, action: dict[str, Any], screen_width: int, screen_height: int
     ) -> dict[str, Any]:
-        """Execute a parsed action via ADB.
+        """Execute a parsed action via platform controller.
 
         Args:
             action: Parsed action dictionary.
@@ -889,15 +916,13 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             Dictionary with 'success' (bool) and 'message' (str) keys.
         """
         action_name = action.get("action")
-        device_id = self.config.device_id
 
         try:
             if action_name == "Launch":
                 app_name = action.get("app")
                 if not app_name:
                     return {"success": False, "message": "No app name provided"}
-                # launch_app now accepts app_name directly and handles conversion internally
-                success = adb_controller.launch_app(app_name, device_id)
+                success = self.controller.launch_app(app_name)
                 if success:
                     return {"success": True, "message": f"Launched {app_name}"}
                 return {"success": False, "message": f"Failed to launch {app_name}"}
@@ -911,11 +936,19 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 y = int(element[1] / 1000 * screen_height)
 
                 if action_name == "Tap":
-                    adb_controller.tap(x, y, device_id)
+                    self.controller.tap(x, y)
                 elif action_name == "Double Tap":
-                    adb_controller.double_tap(x, y, device_id)
+                    # Double tap not in protocol - use tap twice
+                    self.controller.tap(x, y)
+                    time.sleep(0.2)
+                    self.controller.tap(x, y)
                 else:  # Long Press
-                    adb_controller.long_press(x, y, 3000, device_id)  # 3 seconds (match original)
+                    # Long press not in protocol - iOS uses long_press via device module
+                    if self.config.platform == "android":
+                        adb_controller.long_press(x, y, 3000, self.config.device_id)
+                    else:
+                        from deepagents_cli.middleware.autoglm.ios import device as ios_device
+                        ios_device.long_press(x, y, duration=3.0, wda_url=self.config.wda_url)
 
                 return {"success": True, "message": f"Executed {action_name} at ({x}, {y})"}
 
@@ -923,24 +956,26 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 text = action.get("text", "")
 
                 try:
-                    # Switch to ADB keyboard and save original IME for cleanup
-                    original_ime = adb_controller.set_adb_keyboard(device_id)
-                    self._original_ime = original_ime  # Track for cleanup on interrupt
-                    time.sleep(1.0)  # keyboard_switch_delay - increased to ensure keyboard is fully activated
+                    # Platform-specific keyboard handling
+                    if self.config.platform == "android":
+                        # Switch to ADB keyboard and save original IME for cleanup
+                        original_ime = adb_controller.set_adb_keyboard(self.config.device_id)
+                        self._original_ime = original_ime  # Track for cleanup on interrupt
+                        time.sleep(1.0)  # keyboard_switch_delay
 
-                    # Clear existing text and type new text
-                    adb_controller.clear_text(device_id)
-                    time.sleep(0.5)  # text_clear_delay - increased for stability
+                        # Clear existing text
+                        adb_controller.clear_text(self.config.device_id)
+                        time.sleep(0.5)  # text_clear_delay
 
                     # Log text length for debugging
                     if self.config.verbose:
                         print(f"[Type Action] Inputting text: {len(text)} characters")
                         print(f"[Type Action] Text preview: {text[:100]}..." if len(text) > 100 else f"[Type Action] Text: {text}")
 
-                    # Type text directly - type_text handles newlines correctly via base64 encoding
-                    adb_controller.type_text(text, device_id, verbose=self.config.verbose)
+                    # Type text via platform controller
+                    self.controller.type_text(text)
 
-                    # Increased delay for long text to ensure all chunks are processed
+                    # Delay for text to be processed
                     if len(text) > 500:
                         time.sleep(2.0)  # 2s for long text
                     else:
@@ -949,15 +984,16 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                     return {"success": True, "message": f"Typed: {len(text)} characters"}
 
                 finally:
-                    # Always restore keyboard, even if interrupted
-                    try:
-                        if self._original_ime:
-                            adb_controller.restore_keyboard(self._original_ime, device_id)
-                            time.sleep(0.5)  # keyboard_restore_delay
-                            self._original_ime = None  # Clear after restoration
-                    except Exception as e:
-                        if self.config.verbose:
-                            print(f"Warning: Failed to restore keyboard in Type action: {e}")
+                    # Restore keyboard (Android only)
+                    if self.config.platform == "android":
+                        try:
+                            if self._original_ime:
+                                adb_controller.restore_keyboard(self._original_ime, self.config.device_id)
+                                time.sleep(0.5)  # keyboard_restore_delay
+                                self._original_ime = None  # Clear after restoration
+                        except Exception as e:
+                            if self.config.verbose:
+                                print(f"Warning: Failed to restore keyboard in Type action: {e}")
 
             if action_name == "Swipe":
                 start = action.get("start")
@@ -970,16 +1006,16 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 end_x = int(end[0] / 1000 * screen_width)
                 end_y = int(end[1] / 1000 * screen_height)
 
-                # Use None for duration to auto-calculate based on distance (1000-2000ms range)
-                adb_controller.swipe(start_x, start_y, end_x, end_y, None, device_id)
+                # Use None for duration to auto-calculate based on distance
+                self.controller.swipe(start_x, start_y, end_x, end_y, duration=None)
                 return {"success": True, "message": "Executed swipe"}
 
             if action_name == "Back":
-                adb_controller.press_back(device_id)
+                self.controller.press_back()
                 return {"success": True, "message": "Pressed back"}
 
             if action_name == "Home":
-                adb_controller.press_home(device_id)
+                self.controller.press_home()
                 return {"success": True, "message": "Pressed home"}
 
             if action_name == "Wait":
@@ -1029,7 +1065,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 Confirmation message.
             """
             try:
-                adb_controller.tap(x, y, self.config.device_id)
+                self.controller.tap(x, y)
                 return ToolMessage(
                     content=f"Tapped at ({x}, {y})",
                     tool_call_id=runtime.tool_call_id,
@@ -1066,7 +1102,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 Confirmation message.
             """
             try:
-                adb_controller.swipe(start_x, start_y, end_x, end_y, duration_ms, self.config.device_id)
+                # Convert duration from milliseconds to seconds for platform controller
+                duration_sec = duration_ms / 1000.0 if duration_ms else None
+                self.controller.swipe(start_x, start_y, end_x, end_y, duration=duration_sec)
                 return ToolMessage(
                     content=f"Swiped from ({start_x}, {start_y}) to ({end_x}, {end_y})",
                     tool_call_id=runtime.tool_call_id if runtime else None,
@@ -1086,7 +1124,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             text: str,
             runtime: ToolRuntime[None, AgentState],
         ) -> ToolMessage | str:
-            """Type text on the phone using ADB Keyboard.
+            """Type text on the phone.
 
             Args:
                 text: Text to type.
@@ -1095,7 +1133,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 Confirmation message.
             """
             try:
-                adb_controller.type_text(text, self.config.device_id)
+                self.controller.type_text(text)
                 return ToolMessage(
                     content=f"Typed: {text}",
                     tool_call_id=runtime.tool_call_id,
@@ -1120,13 +1158,13 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 Path to the saved screenshot.
             """
             try:
-                screenshot = adb_controller.take_screenshot(self.config.device_id)
+                screenshot_base64, width, height = self.controller.take_screenshot()
                 screenshot_path = self.screenshot_dir / f"manual_{int(time.time())}.png"
                 with open(screenshot_path, "wb") as f:
                     # Decode base64 string to binary data for file writing
-                    f.write(base64.b64decode(screenshot.base64_data))
+                    f.write(base64.b64decode(screenshot_base64))
                 return ToolMessage(
-                    content=f"Screenshot saved to: {screenshot_path}\nSize: {screenshot.width}x{screenshot.height}",
+                    content=f"Screenshot saved to: {screenshot_path}\nSize: {width}x{height}",
                     tool_call_id=runtime.tool_call_id,
                     name="phone_screenshot",
                     status="success",
@@ -1149,7 +1187,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 Confirmation message.
             """
             try:
-                adb_controller.press_back(self.config.device_id)
+                self.controller.press_back()
                 return ToolMessage(
                     content="Pressed back button",
                     tool_call_id=runtime.tool_call_id,
@@ -1174,7 +1212,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 Confirmation message.
             """
             try:
-                adb_controller.press_home(self.config.device_id)
+                self.controller.press_home()
                 return ToolMessage(
                     content="Pressed home button",
                     tool_call_id=runtime.tool_call_id,
@@ -1203,24 +1241,16 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 Confirmation message.
             """
             try:
-                package_name = apps.find_package_name(app_name)
-                if not package_name:
-                    return ToolMessage(
-                        content=f"Unknown app: {app_name}. Use phone_list_apps to see supported apps.",
-                        tool_call_id=runtime.tool_call_id,
-                        name="phone_launch",
-                        status="error",
-                    )
-                success = adb_controller.launch_app(package_name, self.config.device_id)
+                success = self.controller.launch_app(app_name)
                 if success:
                     return ToolMessage(
-                        content=f"Launched {app_name} ({package_name})",
+                        content=f"Launched {app_name}",
                         tool_call_id=runtime.tool_call_id,
                         name="phone_launch",
                         status="success",
                     )
                 return ToolMessage(
-                    content=f"Failed to launch {app_name}",
+                    content=f"Failed to launch {app_name}. App may not be supported.",
                     tool_call_id=runtime.tool_call_id,
                     name="phone_launch",
                     status="error",

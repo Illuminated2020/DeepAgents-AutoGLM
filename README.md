@@ -114,92 +114,38 @@ deepagents skills create my-skill # 创建新技能
 
 像在聊天界面中一样自然输入。Agent 将使用其内置工具、技能和记忆来帮助您完成任务。
 
-### AutoGLM 安装（可选 - Android 自动化）
+### AutoGLM 安装（可选 - Android/iOS 自动化）
 
-如果需要使用 Android 设备自动化功能，请安装 AutoGLM 支持。
+如果需要使用 Android 或 iOS 设备自动化功能，请安装 AutoGLM 支持。
 
-> **注意**: AutoGLM 是可选功能，不安装也不影响 deepagents-cli 的其他功能使用。
+> **注意**: AutoGLM 是可选功能，不安装也不影响 deepagents-cli 的其他功能使用。需要将AUTOGLM_ENABLED设置为false。
 
-**1. 安装 AutoGLM 依赖：**
+**快速开始：**
 
-```bash
-# 在项目根目录下
-# 使用 pip
-pip install -e ".[autoglm]"
+1. **安装依赖**
+   ```bash
+   pip install -e ".[autoglm]"
+   # 或使用 uv
+   uv pip install -e ".[autoglm]"
+   ```
 
-# 或使用 uv
-uv pip install -e ".[autoglm]"
-```
+2. **Android 设备配置**
+   - 安装 ADB 工具：`brew install android-platform-tools`（macOS）
+   - 启用 USB 调试：设置 → 开发者选项 → USB 调试
+   - 安装 ADB Keyboard：用于文本输入
+   - 配置视觉模型：本地部署或云端服务
 
-**2. 安装 ADB 工具：**
+   📚 详细步骤：[Android 设备配置](docs/autoglm_setup.md#android-设备配置)
 
-- **macOS：** `brew install android-platform-tools`
-- **Ubuntu/Debian：** `sudo apt-get install android-tools-adb`
-- **Windows：** 
-1. 从 [官方网站](https://developer.android.com/tools/releases/platform-tools) 下载 platform-tools
-2. 解压到自定义路径（如 `C:\platform-tools`）
-3. 配置环境变量：
-   - 右键 `此电脑` → `属性` → `高级系统设置` → `环境变量`
-   - 在 `系统变量` 中找到 `Path`，点击 `编辑`
-   - 点击 `新建`，添加 platform-tools 的完整路径（如 `C:\platform-tools`）
-   - 点击 `确定` 保存
+3. **iOS 设备配置**
+   - 安装 Xcode 和配置开发者账号
+   - 配置 WebDriverAgent：iOS 自动化核心组件
+   - 启用 UI 自动化：设置 → 开发者 → UI 自动化
+   - 配置视觉模型：本地部署或云端服务
 
-验证安装：
-```bash
-adb version  # 应输出版本信息
-```
+   📱 详细步骤：[iOS 设备配置](docs/autoglm_setup.md#ios-设备配置)
 
-**3. 快速设备配置：**
-
-```bash
-# 1. 在手机上启用开发者模式
-#    设置 → 关于手机 → 连续点击"版本号" 7-10 次
-
-# 2. 启用 USB 调试
-#    设置 → 开发者选项 → USB 调试 → 开启
-#    （部分机型还需启用"USB 调试(安全设置)"）
-
-# 3. 连接设备并验证
-adb devices
-# 应显示: XXXXXXXX    device
-# 如显示 unauthorized，在手机上点击"允许 USB 调试"
-```
-
-**4. 安装 ADB Keyboard（用于文本输入）：**
-
-下载并安装 [ADBKeyboard.apk](https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk)：
-
-- **方式 1：通过 ADB 安装**（电脑端执行）
-  ```bash
-  wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
-  adb install -r ADBKeyboard.apk
-  ```
-
-- **方式 2：手动安装**
-  - 在手机浏览器中打开下载链接
-  - 下载 APK 文件后点击安装
-  - 允许来自此来源的应用安装
-
-**启用 ADB Keyboard：**
-
-- **方式 1：手动启用**
-  - 进入 `设置` → `语言和输入法` → `虚拟键盘` 或 `键盘列表`
-  - 找到并启用 `ADB Keyboard`
-
-- **方式 2：命令启用**（电脑端执行）
-  ```bash
-  adb shell ime enable com.android.adbkeyboard/.AdbIME
-  ```
-**4. 配置环境变量和视觉模型：**
-
-详细配置步骤（包括环境变量、WiFi 连接、模型部署等）请参考 [AutoGLM 配置详解](#autoglm-配置详解) 章节。
-
-**可选模型：**
-
-| 模型                          | 下载链接                                                                                                                                                              | 说明                 |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| AutoGLM-Phone-9B              | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B)                           | 针对中文手机应用优化 |
-| AutoGLM-Phone-9B-Multilingual | [🤗 Hugging Face](https://huggingface.co/zai-org/AutoGLM-Phone-9B-Multilingual)<br>[🤖 ModelScope](https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B-Multilingual) | 支持英语等多语言场景 |
+**完整配置指南：** 📚 [AutoGLM 配置详解](docs/autoglm_setup.md)
 
 ## 内置工具
 
@@ -234,20 +180,6 @@ Agent 自带以下内置工具（无需配置即可使用）：
 | `phone_back`       | 按返回键                                                |
 | `phone_home`       | 按主屏幕键                                              |
 | `phone_launch`     | 按名称启动应用                                          |
-
-**AutoGLM 使用示例：**
-
-```bash
-$ deepagents
-用户：打开微信
-Agent：使用 phone_task 工具自动打开微信应用
-
-用户：在抖音搜索"北京旅游攻略"
-Agent：使用 phone_task 工具打开抖音并搜索内容
-
-用户：给小明发微信消息说"你好"
-Agent：使用 phone_task 工具打开微信、找到聊天并发送消息
-```
 
 > [!WARNING]
 > **人工确认（HITL）要求**
@@ -401,8 +333,14 @@ Agent 使用 `edit_file` 在学习偏好或收到反馈时更新记忆。
 要在默认 Agent 中全局使用示例技能，只需将它们复制到 Agent 的全局或项目级技能目录：
 
 ```bash
+# 创建技能目录
 mkdir -p ~/.deepagents/agent/skills
+
+# 复制单个技能
 cp -r examples/skills/web-research ~/.deepagents/agent/skills/
+
+# 或者一次性复制所有示例技能
+cp -r examples/skills/* ~/.deepagents/agent/skills/
 ```
 
 管理技能：
@@ -441,313 +379,6 @@ $ "创建一个实现 LangGraph Agent 的 agent.py 脚本"
 3. **注入提示** - 将技能列表及描述添加到系统提示："可用技能：web-research - 用于网络研究任务..."
 4. **渐进式加载** - Agent 仅在任务与技能描述匹配时使用 `read_file` 读取完整的 `SKILL.md` 内容
 5. **执行工作流** - Agent 遵循技能文件中的逐步指令
-
-## AutoGLM 配置详解
-
-### 一、环境变量配置
-
-**创建配置文件：**
-
-```bash
-# 复制示例配置文件
-cp .env.example .env
-```
-
-**编辑 `.env` 文件：**
-
-```bash
-# ============ 基础 LLM 配置 ============
-OPENAI_API_KEY=your-api-key
-OPENAI_MODEL=gpt-4
-
-# ============ AutoGLM 配置 ============
-# 启用 AutoGLM
-AUTOGLM_ENABLED=true
-
-# 视觉模型配置
-AUTOGLM_VISION_MODEL_URL=http://localhost:8000/v1  # 本地部署
-# 或使用云端服务：
-# AUTOGLM_VISION_MODEL_URL=https://open.bigmodel.cn/api/paas/v4  # 智谱 AI
-AUTOGLM_VISION_MODEL_NAME=autoglm-phone-9b
-AUTOGLM_VISION_API_KEY=EMPTY  # 本地部署使用 EMPTY，云端使用实际 API Key
-
-# 设备配置（可选，留空自动检测第一个设备）
-# AUTOGLM_DEVICE_ID=
-
-# 语言配置（zh=中文，en=英文）
-AUTOGLM_LANG=zh
-
-# 最大步骤数
-AUTOGLM_MAX_STEPS=100
-
-# 是否暴露底层工具（false=仅高级 phone_task）
-AUTOGLM_EXPOSE_LOW_LEVEL_TOOLS=false
-
-# 详细日志（调试用）
-AUTOGLM_VERBOSE=false
-```
-
-详细配置说明请参考 [.env.example](.env.example) 文件。
-
-### 二、连接 Android 设备
-
-#### 方式一：USB 连接（推荐）
-
-```bash
-# 1. 在设备上启用开发者模式
-#    设置 → 关于手机 → 找到"版本号"
-#    连续快速点击"版本号" 7-10 次
-#    看到"您已处于开发者模式"提示
-
-# 2. 启用 USB 调试
-#    设置 → 开发者选项 → USB 调试 → 开启
-#    （部分机型还需启用"USB 调试(安全设置)"）
-
-# 3. 使用 USB 数据线连接设备
-#    注意：必须使用支持数据传输的数据线（非仅充电线）
-
-# 4. 验证连接
-adb devices
-# 应显示: List of devices attached
-#         XXXXXXXX    device
-
-# 常见问题：
-# - 显示 unauthorized：在手机上点击"允许 USB 调试"授权弹窗
-# - 设备未显示：检查 USB 调试是否启用，尝试更换数据线或 USB 接口
-# - 部分机型可能需要重启设备才能生效
-```
-
-#### 方式二：WiFi 连接（Android 11+）
-
-```bash
-# 1. 在手机上启用无线调试
-#    确保手机和电脑在同一个 WiFi 网络
-#    进入：设置 → 开发者选项 → 无线调试 → 启用
-#    点击"使用配对码配对设备"
-
-# 2. 配对设备（在电脑上执行，输入手机上显示的配对码）
-adb pair <设备IP>:<配对端口>
-# 示例: adb pair 192.168.1.100:46201
-# Enter pairing code: 441750  （输入手机上显示的配对码）
-
-# 3. 连接设备（使用无线调试端口，注意不是配对端口）
-adb connect <设备IP>:<调试端口>
-# 示例: adb connect 192.168.1.100:41589
-
-# 4. 验证连接
-adb devices
-# 应显示: 192.168.1.100:41589    device
-```
-
-#### 方式三：通过 USB 启用 TCP/IP 模式（Android 7+）
-
-```bash
-# 1. 通过 USB 连接设备
-adb devices
-
-# 2. 启用 TCP/IP 模式（5555 端口）
-adb tcpip 5555
-
-# 3. 获取设备 IP 地址
-adb shell ip addr show wlan0 | grep 'inet '
-# 或在手机上查看：设置 → 关于手机 → 状态信息 → IP 地址
-
-# 4. 拔掉 USB 线，通过 WiFi 连接
-adb connect <设备IP>:5555
-# 示例: adb connect 192.168.1.100:5555
-
-# 5. 验证连接
-adb devices
-```
-
-**远程连接问题排查：**
-
-- **连接被拒绝**：确保设备和电脑在同一网络，检查防火墙是否阻止 5555 端口
-- **连接断开**：WiFi 可能断开，使用 `adb connect <IP>:5555` 重新连接
-- **设备重启后失效**：部分设备重启后会禁用 TCP/IP，需通过 USB 重新启用
-
-### 三、安装 ADB Keyboard
-
-文本输入功能需要 ADB Keyboard：
-
-```bash
-# 下载并安装
-wget https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk
-adb install -r ADBKeyboard.apk
-
-# 方式 1：通过命令启用（推荐）
-adb shell ime enable com.android.adbkeyboard/.AdbIME
-
-# 方式 2：在设备上手动启用
-# 设置 → 语言和输入法 → 虚拟键盘 → 启用 ADB Keyboard
-```
-
-### 四、视觉模型配置
-
-AutoGLM 需要视觉模型来理解手机屏幕。您可以选择本地部署或使用云端服务。
-
-#### 选项 1：本地部署（需要 GPU）
-
-**安装 vLLM：**
-
-```bash
-pip install vllm
-```
-
-**启动视觉模型服务：**
-
-```bash
-python3 -m vllm.entrypoints.openai.api_server \
-  --served-model-name autoglm-phone-9b \
-  --allowed-local-media-path / \
-  --mm-encoder-tp-mode data \
-  --mm_processor_cache_type shm \
-  --mm_processor_kwargs '{"max_pixels":5000000}' \
-  --max-model-len 25480 \
-  --chat-template-content-format string \
-  --limit-mm-per-prompt '{"image":10}' \
-  --model zai-org/AutoGLM-Phone-9B \
-  --port 8000
-```
-
-**配置环境变量：**
-
-```bash
-AUTOGLM_VISION_MODEL_URL=http://localhost:8000/v1
-AUTOGLM_VISION_MODEL_NAME=autoglm-phone-9b
-AUTOGLM_VISION_API_KEY=EMPTY
-```
-
-#### 选项 2：使用第三方云端服务（推荐 - 无需 GPU）
-
-**2.1 智谱 BigModel**
-
-- **文档**: https://docs.bigmodel.cn/cn/api/introduction
-- **申请 API Key**: 在智谱平台注册并申请
-
-**配置环境变量：**
-
-```bash
-AUTOGLM_VISION_MODEL_URL=https://open.bigmodel.cn/api/paas/v4
-AUTOGLM_VISION_MODEL_NAME=autoglm-phone
-AUTOGLM_VISION_API_KEY=your-zhipu-api-key
-```
-
-**2.2 ModelScope（魔搭社区）**
-
-- **文档**: https://modelscope.cn/models/ZhipuAI/AutoGLM-Phone-9B
-- **申请 API Key**: 在 ModelScope 平台注册并申请
-
-**配置环境变量：**
-
-```bash
-AUTOGLM_VISION_MODEL_URL=https://api-inference.modelscope.cn/v1
-AUTOGLM_VISION_MODEL_NAME=ZhipuAI/AutoGLM-Phone-9B
-AUTOGLM_VISION_API_KEY=your-modelscope-api-key
-```
-
-### 五、使用示例
-
-完成以上配置后，即可开始使用：
-
-```bash
-$ deepagents
-
-用户：打开微信
-Agent：我将使用 phone_task 工具打开微信...
-
-用户：搜索最近的咖啡店
-Agent：我将使用 phone_task 工具打开地图应用并搜索咖啡店...
-
-用户：给张三发微信消息说"明天见"
-Agent：我将使用 phone_task 工具打开微信、找到张三的聊天并发送消息...
-```
-
-### 六、支持的应用
-
-AutoGLM 内置了 50+ 款主流应用配置：
-
-| 分类     | 应用                                      |
-| -------- | ----------------------------------------- |
-| 社交通讯 | 微信、QQ、微博、钉钉                      |
-| 电商购物 | 淘宝、京东、拼多多、天猫                  |
-| 美食外卖 | 美团、饿了么、肯德基、麦当劳              |
-| 出行旅游 | 携程、12306、滴滴出行、高德地图、百度地图 |
-| 视频娱乐 | 抖音、快手、bilibili、爱奇艺、腾讯视频    |
-| 音乐音频 | 网易云音乐、QQ音乐、喜马拉雅              |
-| 生活服务 | 大众点评、支付宝                          |
-| 内容社区 | 小红书、知乎、豆瓣                        |
-| 系统应用 | 电话、短信、相机、设置、浏览器            |
-
-## 技术架构
-
-### 核心组件
-
-**deepagents-cli** 基于 [deepagents](https://github.com/langchain-ai/deepagents) 框架构建，使用 LangChain Middleware 机制实现模块化扩展：
-
-- **Agent 管理**: 基于 `create_deep_agent` 创建和管理多个 Agent 配置
-- **技能系统**: 渐进式披露技能（Skills），按需加载领域知识
-- **记忆系统**: 全局和项目级别的持久化记忆（`agent.md`）
-- **Shell 集成**: 本地 Shell 命令执行支持
-- **AutoGLM 中间件**（可选）: Android GUI 自动化能力
-
-### AutoGLM 集成（可选）
-
-当启用 AutoGLM 时，通过 **Middleware 机制**注入 Android 控制能力：
-
-**核心设计**
-
-- 使用 `content_blocks` 处理多模态消息（文本 + 屏幕截图）
-- 使用 `HumanInTheLoopMiddleware` 实现敏感操作审批
-- 使用子 Agent 机制创建专门的 Phone Agent
-
-**工作流程**
-
-```
-用户请求 → 主 Agent → phone_task 工具 → Phone Sub-Agent
-                                          ↓
-                     ← 返回结果 ← 执行动作 ← Vision Model 理解屏幕
-```
-
-**组件结构**
-
-- `AutoGLMMiddleware`: 注入工具和系统检查（`middleware/autoglm_middleware.py`）
-- `ADBController`: ADB 命令封装（`middleware/autoglm/adb_controller.py`）
-- `ActionParser`: 解析模型输出动作（`middleware/autoglm/action_parser.py`）
-
-## 开发
-
-### 运行测试
-
-运行测试套件：
-
-```bash
-uv sync --all-groups
-
-make test
-```
-
-### 开发期间运行
-
-```bash
-# 在项目根目录中
-uv run deepagents
-
-# 或以可编辑模式安装
-uv pip install -e .
-deepagents
-```
-
-### 修改 CLI
-
-- **UI 更改** → 编辑 `ui.py` 或 `input.py`
-- **添加新工具** → 编辑 `tools.py`
-- **更改执行流程** → 编辑 `execution.py`
-- **添加命令** → 编辑 `commands.py`
-- **Agent 配置** → 编辑 `agent.py`
-- **技能系统** → 编辑 `skills/` 模块
-- **常量/颜色** → 编辑 `config.py`
-- **AutoGLM 中间件** → 编辑 `middleware/autoglm_middleware.py`
 
 ## 路线图
 
