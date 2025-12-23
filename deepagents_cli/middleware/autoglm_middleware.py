@@ -937,7 +937,20 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                         print(f"[Type Action] Inputting text: {len(text)} characters")
                         print(f"[Type Action] Text preview: {text[:100]}..." if len(text) > 100 else f"[Type Action] Text: {text}")
 
-                    adb_controller.type_text(text, device_id, verbose=self.config.verbose)
+                    # Handle multiline text by splitting on newlines
+                    if '\n' in text:
+                        lines = text.split('\n')
+                        for i, line in enumerate(lines):
+                            if line:  # Only type non-empty lines
+                                adb_controller.type_text(line, device_id, verbose=self.config.verbose)
+                                time.sleep(0.01)
+
+                            # Send ENTER key between lines (not after the last line)
+                            if i < len(lines) - 1:
+                                adb_controller.send_keyevent("KEYCODE_ENTER", device_id)
+                                time.sleep(0.01)
+                    else:
+                        adb_controller.type_text(text, device_id, verbose=self.config.verbose)
 
                     # Increased delay for long text to ensure all chunks are processed
                     if len(text) > 500:

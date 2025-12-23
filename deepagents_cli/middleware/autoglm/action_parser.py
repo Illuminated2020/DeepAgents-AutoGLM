@@ -129,6 +129,12 @@ def parse_action(action_str: str) -> dict[str, Any]:
         # Handle do(...) actions using AST parsing
         if action_str.startswith("do("):
             try:
+                # Escape special characters (newlines, tabs, etc.) for valid Python syntax
+                # This handles cases where model output contains unescaped newlines
+                action_str = action_str.replace('\n', '\\n')
+                action_str = action_str.replace('\r', '\\r')
+                action_str = action_str.replace('\t', '\\t')
+
                 # Parse the function call as an expression
                 tree = ast.parse(action_str, mode="eval")
                 if not isinstance(tree.body, ast.Call):

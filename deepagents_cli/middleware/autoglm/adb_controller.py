@@ -77,7 +77,7 @@ def check_adb_available() -> bool:
     """
     try:
         result = subprocess.run(
-            ["adb", "version"], capture_output=True, text=True, timeout=5
+            ["adb", "version"], capture_output=True, text=True, encoding="utf-8", timeout=5
         )
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -92,7 +92,7 @@ def list_devices() -> list[DeviceInfo]:
     """
     try:
         result = subprocess.run(
-            ["adb", "devices", "-l"], capture_output=True, text=True, timeout=5
+            ["adb", "devices", "-l"], capture_output=True, text=True, encoding="utf-8", timeout=5
         )
 
         devices = []
@@ -154,6 +154,7 @@ def connect_device(address: str, timeout: int = 10) -> tuple[bool, str]:
             ["adb", "connect", address],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=timeout,
         )
 
@@ -186,7 +187,7 @@ def disconnect_device(address: str | None = None) -> tuple[bool, str]:
         if address:
             cmd.append(address)
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=5)
         output = result.stdout + result.stderr
         return True, output.strip() or "Disconnected"
 
@@ -211,6 +212,7 @@ def check_adb_keyboard(device_id: str | None = None) -> bool:
             adb_prefix + ["shell", "pm", "list", "packages"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=5,
         )
 
@@ -222,6 +224,7 @@ def check_adb_keyboard(device_id: str | None = None) -> bool:
             adb_prefix + ["shell", "ime", "list", "-s"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=5,
         )
 
@@ -254,6 +257,7 @@ def take_screenshot(device_id: str | None = None, timeout: int = 10) -> Screensh
             adb_prefix + ["shell", "screencap", "-p", "/sdcard/tmp.png"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=timeout,
         )
 
@@ -267,6 +271,7 @@ def take_screenshot(device_id: str | None = None, timeout: int = 10) -> Screensh
             adb_prefix + ["pull", "/sdcard/tmp.png", temp_path],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=5,
         )
 
@@ -470,6 +475,21 @@ def press_home(device_id: str | None = None, delay: float | None = None) -> None
     time.sleep(delay)
 
 
+def send_keyevent(keycode: str, device_id: str | None = None) -> None:
+    """Send a keyevent to the device.
+
+    Args:
+        keycode: The keycode to send (e.g., "KEYCODE_ENTER", "KEYCODE_BACK").
+        device_id: Optional device ID.
+    """
+    adb_prefix = _get_adb_prefix(device_id)
+    subprocess.run(
+        adb_prefix + ["shell", "input", "keyevent", keycode],
+        capture_output=True,
+        text=True,
+    )
+
+
 # Text Input
 
 
@@ -527,6 +547,7 @@ def type_text(text: str, device_id: str | None = None, verbose: bool = False) ->
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         if verbose and result.returncode != 0:
             print(f"[type_text] Warning: broadcast failed with return code {result.returncode}")
@@ -561,6 +582,7 @@ def type_text(text: str, device_id: str | None = None, verbose: bool = False) ->
                 ],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 timeout=5,  # Add timeout to avoid hanging
             )
 
@@ -600,6 +622,7 @@ def clear_text(device_id: str | None = None) -> None:
         adb_prefix + ["shell", "am", "broadcast", "-a", "ADB_CLEAR_TEXT"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
 
 
@@ -619,6 +642,7 @@ def set_adb_keyboard(device_id: str | None = None) -> str:
         adb_prefix + ["shell", "settings", "get", "secure", "default_input_method"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     current_ime = (result.stdout + result.stderr).strip()
 
@@ -628,6 +652,7 @@ def set_adb_keyboard(device_id: str | None = None) -> str:
             adb_prefix + ["shell", "ime", "set", "com.android.adbkeyboard/.AdbIME"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
 
     # Warm up the keyboard
@@ -646,7 +671,7 @@ def restore_keyboard(ime: str, device_id: str | None = None) -> None:
     adb_prefix = _get_adb_prefix(device_id)
 
     subprocess.run(
-        adb_prefix + ["shell", "ime", "set", ime], capture_output=True, text=True
+        adb_prefix + ["shell", "ime", "set", ime], capture_output=True, text=True, encoding="utf-8"
     )
 
 
@@ -716,9 +741,11 @@ def get_current_app(device_id: str | None = None) -> str:
     adb_prefix = _get_adb_prefix(device_id)
 
     result = subprocess.run(
-        adb_prefix + ["shell", "dumpsys", "window"], capture_output=True, text=True
+        adb_prefix + ["shell", "dumpsys", "window"], capture_output=True, text=True, encoding="utf-8"
     )
     output = result.stdout
+    if not output:
+        raise ValueError("No output from dumpsys window")
 
     # Import apps module for package name lookup
     from deepagents_cli.middleware.autoglm import apps
