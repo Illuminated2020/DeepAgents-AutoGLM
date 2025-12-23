@@ -114,6 +114,84 @@ deepagents skills create my-skill # 创建新技能
 
 像在聊天界面中一样自然输入。Agent 将使用其内置工具、技能和记忆来帮助您完成任务。
 
+### 环境变量配置
+
+在项目根目录创建 `.env` 文件来配置环境变量。您可以复制 `.env.example` 作为起点：
+
+```bash
+cp .env.example .env
+```
+
+然后根据需要编辑 `.env` 文件。以下是各环境变量的说明：
+
+#### 必需配置
+
+| 环境变量 | 说明 | 示例值 |
+|---------|------|--------|
+| `OPENAI_API_KEY` | OpenAI API 密钥（或兼容的 API 密钥，支持 OpenAI、DeepSeek、通义千问等） | `sk-xxxx` |
+| `OPENAI_MODEL` | 使用的模型名称 | `gpt-4`、`gpt-3.5-turbo`、`deepseek-chat`、`qwen-turbo` |
+
+#### 可选配置
+
+**API 配置：**
+
+| 环境变量 | 说明 | 示例值 |
+|---------|------|--------|
+| `OPENAI_BASE_URL` | API 基础 URL（使用 OpenAI 官方服务时可不设置；使用其他兼容服务时必须设置） | `https://api.deepseek.com/v1` |
+
+**LangSmith 追踪（可选）：**
+
+用于监控和调试 Agent 行为。在 [https://smith.langchain.com/](https://smith.langchain.com/) 获取 API 密钥。
+
+| 环境变量 | 说明 | 示例值 |
+|---------|------|--------|
+| `LANGSMITH_TRACING` | 是否启用 LangSmith 追踪 | `true` / `false` |
+| `LANGSMITH_ENDPOINT` | LangSmith API 端点 | `https://api.smith.langchain.com` |
+| `LANGSMITH_API_KEY` | LangSmith API 密钥 | `ls_xxxx` |
+| `LANGSMITH_PROJECT` | LangSmith 项目名称 | `deepagents-project` |
+
+**Tavily 网络搜索（可选）：**
+
+提供网络搜索能力。在 [https://tavily.com/](https://tavily.com/) 获取 API 密钥。
+
+| 环境变量 | 说明 | 示例值 |
+|---------|------|--------|
+| `TAVILY_API_KEY` | Tavily API 密钥 | `tvly-xxxx` |
+
+**AutoGLM 配置（可选）：**
+
+如果不需要使用 Android/iOS 自动化功能，设置 `AUTOGLM_ENABLED=false` 即可。详细配置请参考下方的 [AutoGLM 安装](#autoglm-安装可选---androidios-自动化) 章节。
+
+| 环境变量 | 说明 | 默认值 |
+|---------|------|--------|
+| `AUTOGLM_ENABLED` | 是否启用 AutoGLM 功能 | `false` |
+| `AUTOGLM_PLATFORM` | 控制的平台：`android` 或 `ios` | `android` |
+| `AUTOGLM_LANG` | 系统提示词语言：`zh` 或 `en` | `zh` |
+| `AUTOGLM_MAX_STEPS` | 自主任务的最大步骤数 | `100` |
+| `AUTOGLM_EXPOSE_LOW_LEVEL_TOOLS` | 是否向主 Agent 暴露底层工具 | `false` |
+| `AUTOGLM_VERBOSE` | 是否启用详细日志 | `false` |
+
+**AutoGLM 视觉模型配置**（当 `AUTOGLM_ENABLED=true` 时必需）：
+
+| 环境变量 | 说明 | 示例值 |
+|---------|------|--------|
+| `AUTOGLM_VISION_MODEL_URL` | 视觉模型 API 基础 URL | 本地：`http://localhost:8000/v1`<br/>智谱 AI：`https://open.bigmodel.cn/api/paas/v4` |
+| `AUTOGLM_VISION_MODEL_NAME` | 视觉模型名称 | 本地：`autoglm-phone-9b`<br/>智谱 AI：`autoglm-phone` |
+| `AUTOGLM_VISION_API_KEY` | 视觉模型 API 密钥 | 本地：`EMPTY`<br/>智谱 AI：API 密钥 |
+
+**AutoGLM Android 设备配置**（当 `AUTOGLM_PLATFORM=android` 时可选）：
+
+| 环境变量 | 说明 | 示例值 |
+|---------|------|--------|
+| `AUTOGLM_DEVICE_ID` | ADB 设备 ID（留空则自动使用第一个连接的设备） | USB：`ABCD1234567890`<br/>WiFi：`192.168.1.100:5555`<br/>模拟器：`emulator-5554` |
+
+**AutoGLM iOS 设备配置**（当 `AUTOGLM_PLATFORM=ios` 时）：
+
+| 环境变量 | 说明 | 示例值 |
+|---------|------|--------|
+| `AUTOGLM_WDA_URL` | WebDriverAgent URL | `http://localhost:8100` |
+| `AUTOGLM_IOS_DEVICE_ID` | iOS 设备 UDID（留空则自动使用第一个连接的设备） | `00008030-001234567890001E` |
+
 ### AutoGLM 安装（可选 - Android/iOS 自动化）
 
 如果需要使用 Android 或 iOS 设备自动化功能，请安装 AutoGLM 支持。
@@ -389,11 +467,11 @@ $ "创建一个实现 LangGraph Agent 的 agent.py 脚本"
 - ✅ 双层中断机制（Ctrl+C 优雅退出）
 - ✅ 长文本输入支持
 - ✅ 改进 AutoGLM 中的中断处理机制
+- ✅ iOS 设备支持
 
 ### 🚧 开发中 / 📋 计划中
 
 - 🚧 `phone_task`被中途中断时可能需要返回更具体的ToolMessage，考虑优化方案中
-- 📋 iOS 设备支持
 - 📋 更多手机操作技能（**欢迎贡献！**）
 
 ## 贡献指南

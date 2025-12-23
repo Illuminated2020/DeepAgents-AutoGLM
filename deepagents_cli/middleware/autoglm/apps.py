@@ -513,6 +513,7 @@ APP_PACKAGES_IOS: dict[str, str] = {
     "Spotify": "com.spotify.client",
     "Netflix": "com.netflix.Netflix",
     "Twitter": "com.atebits.Tweetie2",
+    "X": "com.atebits.Tweetie2",
     "WhatsApp": "net.whatsapp.WhatsApp",
     # Apple Native Apps (Apple 原生应用)
     "Safari": "com.apple.mobilesafari",
