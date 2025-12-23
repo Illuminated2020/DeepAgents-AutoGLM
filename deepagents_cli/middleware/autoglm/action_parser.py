@@ -111,18 +111,26 @@ def parse_action(action_str: str) -> dict[str, Any]:
         if action_str.startswith('do(action="Type"') or action_str.startswith(
             'do(action="Type_Name"'
         ):
-            # Extract text parameter manually to avoid parsing issues
-            text_match = re.search(r'text="([^"]*)"', action_str)
-            if text_match:
-                text = text_match.group(1)
-                action = {"_metadata": "do", "action": "Type", "text": text}
-                return action
-            # Fallback: try to find text with single quotes
-            text_match = re.search(r"text='([^']*)'", action_str)
-            if text_match:
-                text = text_match.group(1)
-                action = {"_metadata": "do", "action": "Type", "text": text}
-                return action
+            # Strategy 1: Find the LAST ") to handle text with embedded quotes
+            # This matches the finish() action parsing strategy
+            if 'text="' in action_str:
+                start_idx = action_str.index('text="') + len('text="')
+                # Find the last ") in the string to get the complete text
+                if '")' in action_str[start_idx:]:
+                    end_idx = action_str.rindex('")')
+                    text = action_str[start_idx:end_idx]
+                    action = {"_metadata": "do", "action": "Type", "text": text}
+                    return action
+
+            # Strategy 2: Try to find text with single quotes
+            if "text='" in action_str:
+                start_idx = action_str.index("text='") + len("text='")
+                if "')" in action_str[start_idx:]:
+                    end_idx = action_str.rindex("')")
+                    text = action_str[start_idx:end_idx]
+                    action = {"_metadata": "do", "action": "Type", "text": text}
+                    return action
+
             msg = "Type action missing text parameter"
             raise ValueError(msg)
 

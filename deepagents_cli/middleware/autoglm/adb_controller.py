@@ -525,8 +525,12 @@ def type_text(text: str, device_id: str | None = None, verbose: bool = False) ->
     MAX_CHUNK_SIZE = 300
 
     # Increased delay for better reliability with long text
-    # Increased from 0.3s to 0.8s to ensure each chunk is fully processed
-    CHUNK_DELAY = 0.8  # 800ms between chunks for better reliability
+    # Increased to 1.2s to ensure each chunk is fully processed before next one
+    CHUNK_DELAY = 1.2  # 1200ms between chunks for better reliability
+
+    # Retry configuration for failed chunks
+    MAX_RETRIES = 3  # Maximum retry attempts per chunk
+    RETRY_DELAY = 0.5  # Delay between retries in seconds
 
     # Short text: use original single-broadcast approach
     if len(text) <= MAX_CHUNK_SIZE:
@@ -568,32 +572,52 @@ def type_text(text: str, device_id: str | None = None, verbose: bool = False) ->
                 chunk_preview = chunk[:50] + "..." if len(chunk) > 50 else chunk
                 print(f"[type_text] Sending chunk {chunk_num}/{total_chunks} ({len(chunk)} chars): {chunk_preview}")
 
-            result = subprocess.run(
-                adb_prefix
-                + [
-                    "shell",
-                    "am",
-                    "broadcast",
-                    "-a",
-                    "ADB_INPUT_B64",
-                    "--es",
-                    "msg",
-                    encoded_chunk,
-                ],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                timeout=5,  # Add timeout to avoid hanging
-            )
+            # Retry mechanism for failed chunks
+            success = False
+            for retry in range(MAX_RETRIES):
+                try:
+                    result = subprocess.run(
+                        adb_prefix
+                        + [
+                            "shell",
+                            "am",
+                            "broadcast",
+                            "-a",
+                            "ADB_INPUT_B64",
+                            "--es",
+                            "msg",
+                            encoded_chunk,
+                        ],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        timeout=5,  # Add timeout to avoid hanging
+                    )
 
-            # Check if broadcast succeeded
-            if result.returncode != 0:
-                error_msg = f"Chunk {chunk_num}/{total_chunks} failed"
+                    # Check if broadcast succeeded
+                    if result.returncode == 0:
+                        success = True
+                        if retry > 0 and verbose:
+                            print(f"[type_text] Chunk {chunk_num}/{total_chunks} succeeded on retry {retry}")
+                        break
+                    else:
+                        if verbose:
+                            print(f"[type_text] Chunk {chunk_num}/{total_chunks} failed (attempt {retry + 1}/{MAX_RETRIES})")
+                            print(f"[type_text] Return code: {result.returncode}, stderr: {result.stderr}")
+
+                        if retry < MAX_RETRIES - 1:
+                            time.sleep(RETRY_DELAY)
+
+                except subprocess.TimeoutExpired:
+                    if verbose:
+                        print(f"[type_text] Chunk {chunk_num}/{total_chunks} timeout (attempt {retry + 1}/{MAX_RETRIES})")
+                    if retry < MAX_RETRIES - 1:
+                        time.sleep(RETRY_DELAY)
+
+            if not success:
                 failed_chunks.append(chunk_num)
                 if verbose:
-                    print(f"[type_text] ERROR: {error_msg}")
-                    print(f"[type_text] Return code: {result.returncode}")
-                    print(f"[type_text] stderr: {result.stderr}")
+                    print(f"[type_text] ERROR: Chunk {chunk_num}/{total_chunks} failed after {MAX_RETRIES} attempts")
 
             # Delay between chunks to ensure proper delivery
             # Increased delay for better reliability
@@ -601,11 +625,11 @@ def type_text(text: str, device_id: str | None = None, verbose: bool = False) ->
                 time.sleep(CHUNK_DELAY)
 
         if failed_chunks:
-            error_msg = f"Failed to send chunks: {failed_chunks}. Text may be incomplete."
+            error_msg = f"Failed to send chunks {failed_chunks} after {MAX_RETRIES} retries. Text is incomplete."
             if verbose:
                 print(f"[type_text] CRITICAL ERROR: {error_msg}")
-            # Don't raise exception, just warn (to match original behavior)
-            print(f"Warning: {error_msg}")
+            # Raise exception to notify caller
+            raise RuntimeError(error_msg)
         elif verbose:
             print(f"[type_text] Successfully sent all {total_chunks} chunks")
 
