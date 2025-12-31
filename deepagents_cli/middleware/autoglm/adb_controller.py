@@ -247,6 +247,7 @@ def take_screenshot(device_id: str | None = None, timeout: int = 10) -> Screensh
     Returns:
         Screenshot object containing base64 data and dimensions.
         Returns black fallback image if capture fails.
+        Sets is_sensitive=True if screen appears to be blocked (black screen).
     """
     temp_path = os.path.join(tempfile.gettempdir(), f"screenshot_{uuid.uuid4()}.png")
     adb_prefix = _get_adb_prefix(device_id)
@@ -261,13 +262,13 @@ def take_screenshot(device_id: str | None = None, timeout: int = 10) -> Screensh
             timeout=timeout,
         )
 
-        # Check for sensitive screen (screenshot blocked)
+        # Check for explicit failure indicators
         output = result.stdout + result.stderr
-        if "Status: -1" in output or "Failed" in output:
+        if "Status: -1" in output or "Failed" in output or result.returncode != 0:
             return _create_fallback_screenshot(is_sensitive=True)
 
         # Pull screenshot to local temp path
-        subprocess.run(
+        pull_result = subprocess.run(
             adb_prefix + ["pull", "/sdcard/tmp.png", temp_path],
             capture_output=True,
             text=True,
@@ -275,12 +276,16 @@ def take_screenshot(device_id: str | None = None, timeout: int = 10) -> Screensh
             timeout=5,
         )
 
-        if not os.path.exists(temp_path):
-            return _create_fallback_screenshot(is_sensitive=False)
+        if pull_result.returncode != 0 or not os.path.exists(temp_path):
+            return _create_fallback_screenshot(is_sensitive=True)
 
-        # Read and encode image
+        # Read and analyze image
         img = Image.open(temp_path)
         width, height = img.size
+
+        # Check if image is black/nearly black (indicates sensitive screen)
+        # Enable verbose output to help debug detection
+        is_sensitive = _is_black_or_nearly_black_screen(img, verbose=True)
 
         buffered = BytesIO()
         img.save(buffered, format="PNG")
@@ -290,12 +295,57 @@ def take_screenshot(device_id: str | None = None, timeout: int = 10) -> Screensh
         os.remove(temp_path)
 
         return Screenshot(
-            base64_data=base64_data, width=width, height=height, is_sensitive=False
+            base64_data=base64_data, width=width, height=height, is_sensitive=is_sensitive
         )
 
     except Exception as e:
         print(f"Screenshot error: {e}")
         return _create_fallback_screenshot(is_sensitive=False)
+
+
+def _is_black_or_nearly_black_screen(img: Image.Image, threshold: float = 30.0, verbose: bool = False) -> bool:
+    """
+    Check if an image is black or nearly black (indicating a sensitive/blocked screen).
+
+    Args:
+        img: PIL Image object to check.
+        threshold: Maximum average brightness (0-255) to consider as black.
+                  Default 30.0 accounts for status bar while detecting mostly black screens.
+        verbose: Print debug information about brightness detection.
+
+    Returns:
+        True if image is predominantly black, False otherwise.
+    """
+    try:
+        # Convert to RGB if needed
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+
+        # Resize to speed up analysis (check a sample)
+        sample_size = (100, 100)
+        img_small = img.resize(sample_size, Image.Resampling.LANCZOS)
+
+        # Calculate average brightness using PIL (no numpy required)
+        pixels = list(img_small.getdata())
+        total_brightness = sum(sum(pixel) / 3 for pixel in pixels)  # Average of R,G,B
+        avg_brightness = total_brightness / len(pixels)
+
+        if verbose:
+            print(f"[DEBUG] Screenshot brightness: {avg_brightness:.2f} (threshold: {threshold})")
+
+        # If average brightness is very low, it's likely a black screen
+        is_black = avg_brightness < threshold
+
+        if verbose and is_black:
+            print(f"[DEBUG] Detected sensitive/black screen (brightness {avg_brightness:.2f} < {threshold})")
+
+        return is_black
+
+    except Exception as e:
+        if verbose:
+            print(f"[DEBUG] Brightness detection failed: {e}")
+        # If analysis fails, assume it's not a black screen
+        return False
 
 
 def _create_fallback_screenshot(is_sensitive: bool) -> Screenshot:

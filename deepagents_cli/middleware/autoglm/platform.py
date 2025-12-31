@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from . import adb_controller
+from .adb_controller import Screenshot
 from .ios import connection as ios_connection
 from .ios import device as ios_device
 from .ios import input as ios_input
@@ -36,12 +37,12 @@ class PlatformController(Protocol):
     to provide a consistent interface for device automation.
     """
 
-    def take_screenshot(self) -> tuple[str, int, int]:
+    def take_screenshot(self) -> Screenshot:
         """
         Capture a screenshot from the device.
 
         Returns:
-            Tuple of (base64_data, width, height).
+            Screenshot object containing base64_data, width, height, and is_sensitive flag.
         """
         ...
 
@@ -127,10 +128,9 @@ class AndroidController:
         self.config = config
         self.device_id = config.device_id
 
-    def take_screenshot(self) -> tuple[str, int, int]:
+    def take_screenshot(self) -> Screenshot:
         """Capture a screenshot from the Android device."""
-        screenshot = adb_controller.take_screenshot(device_id=self.device_id)
-        return screenshot.base64_data, screenshot.width, screenshot.height
+        return adb_controller.take_screenshot(device_id=self.device_id)
 
     def tap(self, x: int, y: int) -> None:
         """Tap at the specified coordinates on Android device."""
@@ -189,14 +189,13 @@ class IOSController:
         self.session_id = config.wda_session_id
         self.app_packages = app_packages or {}
 
-    def take_screenshot(self) -> tuple[str, int, int]:
+    def take_screenshot(self) -> Screenshot:
         """Capture a screenshot from the iOS device."""
-        screenshot = ios_screenshot.get_screenshot(
+        return ios_screenshot.get_screenshot(
             wda_url=self.wda_url,
             session_id=self.session_id,
             device_id=self.device_id,
         )
-        return screenshot.base64_data, screenshot.width, screenshot.height
 
     def tap(self, x: int, y: int) -> None:
         """Tap at the specified coordinates on iOS device."""

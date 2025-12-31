@@ -637,10 +637,97 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 self._check_interrupt(step)
 
                 # Take screenshot using platform controller
-                screenshot_base64, screenshot_width, screenshot_height = self.controller.take_screenshot()
+                screenshot_result = self.controller.take_screenshot()
 
                 # Check interrupt after screenshot
                 self._check_interrupt(step)
+
+                # 检测敏感页面 - 提示用户选择如何处理
+                if screenshot_result.is_sensitive:
+                    # 获取当前应用信息
+                    current_app = self.controller.get_current_app()
+
+                    if self.config.verbose:
+                        print(f"\n⚠️  Step {step}: 检测到敏感页面 [{current_app}]")
+
+                    # 提示用户选择如何处理
+                    from rich.console import Console
+                    from rich.panel import Panel
+                    console = Console()
+
+                    console.print()
+                    console.print(
+                        Panel(
+                            f"[bold yellow]⚠️  检测到敏感页面[/bold yellow]\n\n"
+                            f"平台: {self.config.platform.upper()}\n"
+                            f"步骤: {step}\n"
+                            f"应用: {current_app}\n\n"
+                            f"检测到敏感页面（密码输入/支付确认等）。系统已阻止截图。\n\n"
+                            f"[bold cyan]请在手机上手动完成此步骤（输入密码、确认支付等）[/bold cyan]",
+                            border_style="yellow",
+                            title="敏感页面",
+                        )
+                    )
+                    console.print()
+                    console.print("[cyan]选择操作：[/cyan]")
+                    console.print("  [1] 手动完成后继续 (推荐)")
+                    console.print("  [2] 终止任务")
+                    console.print()
+
+                    # 等待用户选择
+                    while True:
+                        try:
+                            choice = input("请选择 [1/2] (默认=1): ").strip()
+                            if not choice or choice == "1":
+                                # 继续执行
+                                console.print()
+                                console.print("[green]✓ 继续执行任务...[/green]")
+                                console.print()
+
+                                if self.config.verbose:
+                                    print("   用户已手动完成敏感操作，继续执行...")
+
+                                # 构建屏幕信息（不发送黑屏图片）
+                                import json
+                                screen_info = json.dumps({"current_app": current_app}, ensure_ascii=False)
+                                text_content = f"** Screen Info **\n\n{screen_info}\n\n[系统提示]: 上一步为敏感页面（无法截图）。用户已手动完成敏感操作。"
+
+                                # 仅文本消息，不包含图片
+                                user_message = {
+                                    "role": "user",
+                                    "content": [{"type": "text", "text": text_content}]
+                                }
+                                messages.append(user_message)
+                                break
+                            elif choice == "2":
+                                # 终止任务
+                                console.print()
+                                console.print("[yellow]任务已被用户终止[/yellow]")
+                                console.print()
+                                self._cleanup_resources()
+                                return ToolMessage(
+                                    content="⚠️ 任务已被用户终止（遇到敏感页面）",
+                                    tool_call_id=tool_call_id,
+                                    name="phone_task",
+                                    status="error",
+                                )
+                            else:
+                                console.print("[red]无效选择，请输入 1 或 2[/red]")
+                        except KeyboardInterrupt:
+                            # Ctrl+C 视为终止任务
+                            console.print()
+                            console.print("[yellow]任务已被用户中断[/yellow]")
+                            console.print()
+                            self._cleanup_resources()
+                            raise KeyboardInterrupt(f"任务在敏感页面被用户中断（步骤 {step}）")
+
+                    # 跳过本次截图的 AI 分析，直接进入下一步
+                    continue
+
+                # 正常截图流程（非敏感页面）
+                screenshot_base64 = screenshot_result.base64_data
+                screenshot_width = screenshot_result.width
+                screenshot_height = screenshot_result.height
 
                 # Get current app for context
                 current_app = self.controller.get_current_app()
