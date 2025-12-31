@@ -307,6 +307,15 @@ def _format_execute_description(tool_call: ToolCall, _state: AgentState, _runtim
     return f"Execute Command: {command}\nLocation: Remote Sandbox"
 
 
+def _format_phone_task_description(tool_call: ToolCall, _state: AgentState, _runtime: Runtime) -> str:
+    """Format phone_task tool call for approval prompt."""
+    args = tool_call["args"]
+    task = args.get("task", "N/A")
+    # Truncate task if too long
+    task_preview = task if len(task) <= 200 else task[:200] + "..."
+    return f"Phone Task: {task_preview}\n\n⚠️  Will control the connected mobile device"
+
+
 def _add_interrupt_on() -> dict[str, InterruptOnConfig]:
     """Configure human-in-the-loop interrupt_on settings for destructive tools."""
     shell_interrupt_config: InterruptOnConfig = {
@@ -343,6 +352,12 @@ def _add_interrupt_on() -> dict[str, InterruptOnConfig]:
         "allowed_decisions": ["approve", "reject"],
         "description": _format_task_description,
     }
+
+    phone_task_interrupt_config: InterruptOnConfig = {
+        "allowed_decisions": ["approve", "reject"],
+        "description": _format_phone_task_description,
+    }
+
     return {
         "shell": shell_interrupt_config,
         "execute": execute_interrupt_config,
@@ -351,6 +366,7 @@ def _add_interrupt_on() -> dict[str, InterruptOnConfig]:
         "web_search": web_search_interrupt_config,
         "fetch_url": fetch_url_interrupt_config,
         "task": task_interrupt_config,
+        "phone_task": phone_task_interrupt_config,
     }
 
 

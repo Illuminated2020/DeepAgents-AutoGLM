@@ -7,6 +7,7 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+fix_docs/
 downloads/
 eggs/
 .deepagents/
@@ -68,3 +69,4 @@ dmypy.json
 # Project specific
 *.pyc
 .cache/
+CLAUDE.md

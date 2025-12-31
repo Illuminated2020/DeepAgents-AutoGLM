@@ -468,6 +468,7 @@ Skills follow Anthropic's [progressive disclosure pattern](https://www.anthropic
 - ✅ Long text input support
 - ✅ Improved AutoGLM interrupt handling mechanism
 - ✅ iOS device support
+- ✅ Android sensitive screen detection and manual intervention (password input, payment confirmation, etc.)
 
 ### 🚧 In Progress / 📋 Planned
 
