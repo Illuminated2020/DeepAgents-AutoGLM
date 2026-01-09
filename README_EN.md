@@ -129,7 +129,7 @@ Then edit the `.env` file as needed. Here are the environment variable descripti
 | Environment Variable | Description | Example Values |
 |---------------------|-------------|----------------|
 | `OPENAI_API_KEY` | OpenAI API key (or compatible API key, supports OpenAI, DeepSeek, Qwen, etc.) | `sk-xxxx` |
-| `OPENAI_MODEL` | Model name to use | `gpt-4`, `gpt-3.5-turbo`, `deepseek-chat`, `qwen-turbo` |
+| `OPENAI_MODEL` | Model name to use | `glm-4.7`, `deepseek-v3.2`, `gpt-5` |
 
 #### Optional Configuration
 

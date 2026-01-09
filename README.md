@@ -129,7 +129,7 @@ cp .env.example .env
 | 环境变量 | 说明 | 示例值 |
 |---------|------|--------|
 | `OPENAI_API_KEY` | OpenAI API 密钥（或兼容的 API 密钥，支持 OpenAI、DeepSeek、通义千问等） | `sk-xxxx` |
-| `OPENAI_MODEL` | 使用的模型名称 | `gpt-4`、`gpt-3.5-turbo`、`deepseek-chat`、`qwen-turbo` |
+| `OPENAI_MODEL` | 使用的模型名称 | `glm-4.7`、`deepseek-v3.2`、`gpt-5` |
 
 #### 可选配置
 
