@@ -4,8 +4,7 @@ import time
 
 
 def _get_wda_session_url(wda_url: str, session_id: str | None, endpoint: str) -> str:
-    """
-    Get the correct WDA URL for a session endpoint.
+    """Get the correct WDA URL for a session endpoint.
 
     Args:
         wda_url: Base WDA URL.
@@ -18,9 +17,8 @@ def _get_wda_session_url(wda_url: str, session_id: str | None, endpoint: str) ->
     base = wda_url.rstrip("/")
     if session_id:
         return f"{base}/session/{session_id}/{endpoint}"
-    else:
-        # Try to use WDA endpoints without session when possible
-        return f"{base}/{endpoint}"
+    # Try to use WDA endpoints without session when possible
+    return f"{base}/{endpoint}"
 
 
 def type_text(
@@ -29,8 +27,7 @@ def type_text(
     session_id: str | None = None,
     frequency: int = 60,
 ) -> None:
-    """
-    Type text into the currently focused input field.
+    """Type text into the currently focused input field.
 
     Args:
         text: The text to type.
@@ -53,7 +50,7 @@ def type_text(
             json={"value": list(text), "frequency": frequency},
             timeout=30,
             verify=False,
-            proxies={'http': None, 'https': None}
+            proxies={"http": None, "https": None},
         )
 
         if response.status_code not in (200, 201):
@@ -71,8 +68,7 @@ def clear_text(
     wda_url: str = "http://localhost:8100",
     session_id: str | None = None,
 ) -> None:
-    """
-    Clear text in the currently focused input field.
+    """Clear text in the currently focused input field.
 
     Args:
         wda_url: WebDriverAgent URL.
@@ -88,7 +84,9 @@ def clear_text(
         # First, try to get the active element
         url = _get_wda_session_url(wda_url, session_id, "element/active")
 
-        response = requests.get(url, timeout=10, verify=False, proxies={'http': None, 'https': None})
+        response = requests.get(
+            url, timeout=10, verify=False, proxies={"http": None, "https": None}
+        )
 
         if response.status_code == 200:
             data = response.json()
@@ -101,7 +99,12 @@ def clear_text(
                 clear_url = _get_wda_session_url(
                     wda_url, session_id, f"element/{element_id}/clear"
                 )
-                requests.post(clear_url, timeout=10, verify=False, proxies={'http': None, 'https': None})
+                requests.post(
+                    clear_url,
+                    timeout=10,
+                    verify=False,
+                    proxies={"http": None, "https": None},
+                )
                 return
 
         # Fallback: send backspace commands
@@ -118,8 +121,7 @@ def _clear_with_backspace(
     session_id: str | None = None,
     max_backspaces: int = 100,
 ) -> None:
-    """
-    Clear text by sending backspace keys.
+    """Clear text by sending backspace keys.
 
     Args:
         wda_url: WebDriverAgent URL.
@@ -138,7 +140,7 @@ def _clear_with_backspace(
             json={"value": [backspace_char] * max_backspaces},
             timeout=10,
             verify=False,
-            proxies={'http': None, 'https': None}
+            proxies={"http": None, "https": None},
         )
 
     except Exception as e:
@@ -150,8 +152,7 @@ def send_keys(
     wda_url: str = "http://localhost:8100",
     session_id: str | None = None,
 ) -> None:
-    """
-    Send a sequence of keys.
+    """Send a sequence of keys.
 
     Args:
         keys: List of keys to send.
@@ -167,7 +168,13 @@ def send_keys(
 
         url = _get_wda_session_url(wda_url, session_id, "wda/keys")
 
-        requests.post(url, json={"value": keys}, timeout=10, verify=False, proxies={'http': None, 'https': None})
+        requests.post(
+            url,
+            json={"value": keys},
+            timeout=10,
+            verify=False,
+            proxies={"http": None, "https": None},
+        )
 
     except ImportError:
         print("Error: requests library required. Install: pip install requests")
@@ -180,8 +187,7 @@ def press_enter(
     session_id: str | None = None,
     delay: float = 0.5,
 ) -> None:
-    """
-    Press the Enter/Return key.
+    """Press the Enter/Return key.
 
     Args:
         wda_url: WebDriverAgent URL.
@@ -196,8 +202,7 @@ def hide_keyboard(
     wda_url: str = "http://localhost:8100",
     session_id: str | None = None,
 ) -> None:
-    """
-    Hide the on-screen keyboard.
+    """Hide the on-screen keyboard.
 
     Args:
         wda_url: WebDriverAgent URL.
@@ -208,7 +213,9 @@ def hide_keyboard(
 
         url = f"{wda_url.rstrip('/')}/wda/keyboard/dismiss"
 
-        requests.post(url, timeout=10, verify=False, proxies={'http': None, 'https': None})
+        requests.post(
+            url, timeout=10, verify=False, proxies={"http": None, "https": None}
+        )
 
     except ImportError:
         print("Error: requests library required. Install: pip install requests")
@@ -220,8 +227,7 @@ def is_keyboard_shown(
     wda_url: str = "http://localhost:8100",
     session_id: str | None = None,
 ) -> bool:
-    """
-    Check if the on-screen keyboard is currently shown.
+    """Check if the on-screen keyboard is currently shown.
 
     Args:
         wda_url: WebDriverAgent URL.
@@ -235,7 +241,9 @@ def is_keyboard_shown(
 
         url = _get_wda_session_url(wda_url, session_id, "wda/keyboard/shown")
 
-        response = requests.get(url, timeout=5, verify=False, proxies={'http': None, 'https': None})
+        response = requests.get(
+            url, timeout=5, verify=False, proxies={"http": None, "https": None}
+        )
 
         if response.status_code == 200:
             data = response.json()
@@ -253,8 +261,7 @@ def set_pasteboard(
     text: str,
     wda_url: str = "http://localhost:8100",
 ) -> None:
-    """
-    Set the device pasteboard (clipboard) content.
+    """Set the device pasteboard (clipboard) content.
 
     Args:
         text: Text to set in pasteboard.
@@ -274,7 +281,7 @@ def set_pasteboard(
             json={"content": text, "contentType": "plaintext"},
             timeout=10,
             verify=False,
-            proxies={'http': None, 'https': None}
+            proxies={"http": None, "https": None},
         )
 
     except ImportError:
@@ -286,8 +293,7 @@ def set_pasteboard(
 def get_pasteboard(
     wda_url: str = "http://localhost:8100",
 ) -> str | None:
-    """
-    Get the device pasteboard (clipboard) content.
+    """Get the device pasteboard (clipboard) content.
 
     Args:
         wda_url: WebDriverAgent URL.
@@ -300,7 +306,9 @@ def get_pasteboard(
 
         url = f"{wda_url.rstrip('/')}/wda/getPasteboard"
 
-        response = requests.post(url, timeout=10, verify=False, proxies={'http': None, 'https': None})
+        response = requests.post(
+            url, timeout=10, verify=False, proxies={"http": None, "https": None}
+        )
 
         if response.status_code == 200:
             data = response.json()

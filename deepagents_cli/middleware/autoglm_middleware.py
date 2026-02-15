@@ -27,7 +27,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from langchain.agents.middleware.types import AgentMiddleware, AgentState, ModelRequest, ModelResponse
+from langchain.agents.middleware.types import (
+    AgentMiddleware,
+    AgentState,
+    ModelRequest,
+    ModelResponse,
+)
 from langchain.tools import ToolRuntime, tool
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import ToolMessage
@@ -36,9 +41,17 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-from deepagents_cli.middleware.autoglm import action_parser, adb_controller, apps, prompts
-from deepagents_cli.middleware.autoglm.platform import PlatformConfig, PlatformController, create_controller
-
+from deepagents_cli.middleware.autoglm import (
+    action_parser,
+    adb_controller,
+    apps,
+    prompts,
+)
+from deepagents_cli.middleware.autoglm.platform import (
+    PlatformConfig,
+    PlatformController,
+    create_controller,
+)
 
 # AutoGLM Phone Task Usage Guide
 AUTOGLM_SYSTEM_PROMPT = """
@@ -209,16 +222,16 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                     f"Task: {tc['args']['task']}\\n\\n"
                     f"This will control the connected Android device.\\n"
                     f"Approve to proceed, reject to cancel, or edit to modify the task."
-                )
+                ),
             },
             # Optional: Also require approval for low-level tools
             "phone_tap": True,  # All decisions allowed
             "phone_swipe": True,
             "phone_type": {
                 "allowed_decisions": ["approve", "reject"],  # No editing
-                "description": "Text input requires approval"
-            }
-        }
+                "description": "Text input requires approval",
+            },
+        },
     )
     ```
 
@@ -326,7 +339,11 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         )
 
         # Get app packages for platform controller
-        app_packages = apps.APP_PACKAGES if self.config.platform == "android" else apps.APP_PACKAGES_IOS
+        app_packages = (
+            apps.APP_PACKAGES
+            if self.config.platform == "android"
+            else apps.APP_PACKAGES_IOS
+        )
 
         # Create platform controller (performs all platform-specific checks)
         try:
@@ -341,7 +358,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 devices = adb_controller.list_devices()
                 self.config.device_id = devices[0].device_id
                 if self.config.verbose:
-                    print(f"Using Android device: {self.config.device_id} ({devices[0].model})")
+                    print(
+                        f"Using Android device: {self.config.device_id} ({devices[0].model})"
+                    )
 
             # Check ADB Keyboard (warn only, don't fail)
             if not adb_controller.check_adb_keyboard(self.config.device_id):
@@ -353,12 +372,17 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         elif self.config.platform == "ios":
             # Update device_id if it was auto-selected
             if self.config.ios_device_id is None:
-                from deepagents_cli.middleware.autoglm.ios import connection as ios_connection
+                from deepagents_cli.middleware.autoglm.ios import (
+                    connection as ios_connection,
+                )
+
                 devices = ios_connection.list_devices()
                 self.config.ios_device_id = devices[0].device_id
                 if self.config.verbose:
                     device_name = devices[0].device_name or "Unknown"
-                    print(f"Using iOS device: {device_name} ({devices[0].device_id[:8]}...)")
+                    print(
+                        f"Using iOS device: {device_name} ({devices[0].device_id[:8]}...)"
+                    )
 
         return request
 
@@ -393,7 +417,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             if not self._phone_task_active:
                 # Not in phone_task - call original handler (usually from main.py or execution.py)
                 # This allows the main agent to handle Ctrl+C gracefully
-                if self._original_sigint_handler and callable(self._original_sigint_handler):
+                if self._original_sigint_handler and callable(
+                    self._original_sigint_handler
+                ):
                     self._original_sigint_handler(signum, frame)
                 else:
                     # Fallback to default handler
@@ -414,7 +440,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 message = Text()
                 message.append("Cancelling task gracefully...\n\n", style="bold yellow")
                 message.append("• ", style="dim")
-                message.append("Waiting for current operation to complete\n", style="white")
+                message.append(
+                    "Waiting for current operation to complete\n", style="white"
+                )
                 message.append("• ", style="dim")
                 message.append("Press ", style="white")
                 message.append("Ctrl+C", style="bold cyan")
@@ -532,7 +560,8 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
 
             Args:
                 task: Description of the phone operation task to perform.
-                      Examples:
+
+            Examples:
                       - "Open WeChat and check if there are any unread messages from Alice"
                       - "Open WeChat and send Alice this message: 'Hello, how are you?'"
                       - "Open Maps and search for 'coffee shops near me', tell me the top 3 results"
@@ -555,7 +584,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
 
         return phone_task_tool
 
-    def _execute_phone_task(self, task: str, tool_call_id: str | None) -> ToolMessage | str:
+    def _execute_phone_task(
+        self, task: str, tool_call_id: str | None
+    ) -> ToolMessage | str:
         """Execute a phone automation task (async wrapper).
 
         This wraps the async implementation to provide a synchronous interface
@@ -571,7 +602,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         # Run the async implementation
         return asyncio.run(self._execute_phone_task_async(task, tool_call_id))
 
-    async def _execute_phone_task_async(self, task: str, tool_call_id: str | None) -> ToolMessage | str:
+    async def _execute_phone_task_async(
+        self, task: str, tool_call_id: str | None
+    ) -> ToolMessage | str:
         """Execute a phone automation task asynchronously.
 
         This implements the autonomous agent loop with interruptible model calls:
@@ -606,9 +639,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
 
         try:
             if self.config.verbose:
-                print(f"\n{'='*60}")
+                print(f"\n{'=' * 60}")
                 print(f"Starting phone task: {task}")
-                print(f"{'='*60}\n")
+                print(f"{'=' * 60}\n")
 
             # Reset interrupt state at start of new task
             self._interrupt_flag.clear()
@@ -653,6 +686,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                     # 提示用户选择如何处理
                     from rich.console import Console
                     from rich.panel import Panel
+
                     console = Console()
 
                     console.print()
@@ -689,17 +723,20 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
 
                                 # 构建屏幕信息（不发送黑屏图片）
                                 import json
-                                screen_info = json.dumps({"current_app": current_app}, ensure_ascii=False)
+
+                                screen_info = json.dumps(
+                                    {"current_app": current_app}, ensure_ascii=False
+                                )
                                 text_content = f"** Screen Info **\n\n{screen_info}\n\n[系统提示]: 上一步为敏感页面（无法截图）。用户已手动完成敏感操作。"
 
                                 # 仅文本消息，不包含图片
                                 user_message = {
                                     "role": "user",
-                                    "content": [{"type": "text", "text": text_content}]
+                                    "content": [{"type": "text", "text": text_content}],
                                 }
                                 messages.append(user_message)
                                 break
-                            elif choice == "2":
+                            if choice == "2":
                                 # 终止任务
                                 console.print()
                                 console.print("[yellow]任务已被用户终止[/yellow]")
@@ -711,15 +748,16 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                                     name="phone_task",
                                     status="error",
                                 )
-                            else:
-                                console.print("[red]无效选择，请输入 1 或 2[/red]")
+                            console.print("[red]无效选择，请输入 1 或 2[/red]")
                         except KeyboardInterrupt:
                             # Ctrl+C 视为终止任务
                             console.print()
                             console.print("[yellow]任务已被用户中断[/yellow]")
                             console.print()
                             self._cleanup_resources()
-                            raise KeyboardInterrupt(f"任务在敏感页面被用户中断（步骤 {step}）")
+                            raise KeyboardInterrupt(
+                                f"任务在敏感页面被用户中断（步骤 {step}）"
+                            )
 
                     # 跳过本次截图的 AI 分析，直接进入下一步
                     continue
@@ -735,14 +773,16 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 # Save screenshot for debugging
                 if self.config.screenshot_dir:
                     screenshot_path = self.screenshot_dir / f"step_{step:03d}.png"
-                    with open(screenshot_path, "wb") as f:
+                    with Path(screenshot_path).open("wb") as f:
                         # Decode base64 string to binary data for file writing
                         f.write(base64.b64decode(screenshot_base64))
 
                 # Build screen info in JSON format (matching Open-AutoGLM)
                 import json
 
-                screen_info = json.dumps({"current_app": current_app}, ensure_ascii=False)
+                screen_info = json.dumps(
+                    {"current_app": current_app}, ensure_ascii=False
+                )
 
                 # Build multimodal message (base64_data is already base64 encoded)
                 image_base64 = screenshot_base64
@@ -787,7 +827,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                         # Check interrupt every 0.1 seconds
                         if self._interrupt_flag.is_set():
                             if self.config.verbose:
-                                print("\n[Interrupt detected during model call - cancelling]")
+                                print(
+                                    "\n[Interrupt detected during model call - cancelling]"
+                                )
                             model_task.cancel()
                             # Wait for cancellation to complete
                             try:
@@ -845,11 +887,11 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 if action_parser.is_finish_action(action):
                     finish_message = action.get("message", "Task completed")
                     if self.config.verbose:
-                        print(f"\n{'='*60}")
-                        print(f"✅ Task Completed Successfully!")
+                        print(f"\n{'=' * 60}")
+                        print("✅ Task Completed Successfully!")
                         print(f"Message: {finish_message}")
                         print(f"Total steps: {step}/{self.config.max_steps}")
-                        print(f"{'='*60}\n")
+                        print(f"{'=' * 60}\n")
                     self._cleanup_resources()
 
                     # Return with clear completion message to prevent Agent from retrying
@@ -867,11 +909,15 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 # Remove image from previous message to save context space (matching Open-AutoGLM)
                 if isinstance(messages[-1].get("content"), list):
                     messages[-1]["content"] = [
-                        item for item in messages[-1]["content"] if item.get("type") == "text"
+                        item
+                        for item in messages[-1]["content"]
+                        if item.get("type") == "text"
                     ]
 
                 # Execute action
-                action_result = self._execute_action(action, screenshot_width, screenshot_height)
+                action_result = self._execute_action(
+                    action, screenshot_width, screenshot_height
+                )
 
                 # Check interrupt after action execution
                 self._check_interrupt(step)
@@ -880,13 +926,18 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                     print(f"Action result: {action_result}")
 
                 # Add assistant response to history in Open-AutoGLM format
-                assistant_message = f"<think>{thinking}</think><answer>{action_str}</answer>"
+                assistant_message = (
+                    f"<think>{thinking}</think><answer>{action_str}</answer>"
+                )
                 messages.append({"role": "assistant", "content": assistant_message})
 
                 # If action failed, add error message
                 if not action_result["success"]:
                     messages.append(
-                        {"role": "user", "content": f"Action failed: {action_result['message']}"}
+                        {
+                            "role": "user",
+                            "content": f"Action failed: {action_result['message']}",
+                        }
                     )
 
                 # Small delay between actions (check interrupt during sleep)
@@ -897,11 +948,11 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
 
             # Max steps reached
             if self.config.verbose:
-                print(f"\n{'='*60}")
-                print(f"⚠️  Task Incomplete - Max Steps Reached")
+                print(f"\n{'=' * 60}")
+                print("⚠️  Task Incomplete - Max Steps Reached")
                 print(f"Reached maximum steps: {self.config.max_steps}")
                 print(f"Last thinking: {last_thinking}")
-                print(f"{'='*60}\n")
+                print(f"{'=' * 60}\n")
             self._cleanup_resources()
             return ToolMessage(
                 content=f"Phone task incomplete. Reached maximum steps ({self.config.max_steps}). The task did not finish within the step limit. Last status: {last_thinking}",
@@ -920,12 +971,14 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             was_force_cancelled = self._interrupt_count >= 2
 
             if self.config.verbose:
-                cancel_type = "Force Cancelled" if was_force_cancelled else "Interrupted"
-                print(f"\n{'='*60}")
+                cancel_type = (
+                    "Force Cancelled" if was_force_cancelled else "Interrupted"
+                )
+                print(f"\n{'=' * 60}")
                 print(f"⚠️  Task {cancel_type} by User (Ctrl+C)")
-                print(f"Cleaning up phone resources...")
+                print("Cleaning up phone resources...")
                 print(f"Completed: {step} steps")
-                print(f"{'='*60}\n")
+                print(f"{'=' * 60}\n")
 
             # Clean up phone resources
             self._cleanup_resources()
@@ -937,7 +990,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                     f"⚠️ PHONE TASK {interrupt_type} BY USER ⚠️\n\n"
                     f"The task was {'force cancelled' if was_force_cancelled else 'cancelled'} by user request (Ctrl+C).\n"
                     f"Completed {step} of {self.config.max_steps} steps before interruption.\n\n"
-                    f"Last status: {last_thinking if last_thinking else 'Task was interrupted early'}\n\n"
+                    f"Last status: {last_thinking or 'Task was interrupted early'}\n\n"
                     f"Resources have been cleaned up. You may retry the task if needed."
                 ),
                 tool_call_id=tool_call_id,
@@ -983,7 +1036,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             if self._original_ime and self.config.device_id:
                 if self.config.verbose:
                     print("Restoring original keyboard...")
-                adb_controller.restore_keyboard(self._original_ime, self.config.device_id)
+                adb_controller.restore_keyboard(
+                    self._original_ime, self.config.device_id
+                )
                 self._original_ime = None
         except Exception as e:
             if self.config.verbose:
@@ -1029,15 +1084,22 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                     self.controller.tap(x, y)
                     time.sleep(0.2)
                     self.controller.tap(x, y)
-                else:  # Long Press
-                    # Long press not in protocol - iOS uses long_press via device module
-                    if self.config.platform == "android":
-                        adb_controller.long_press(x, y, 3000, self.config.device_id)
-                    else:
-                        from deepagents_cli.middleware.autoglm.ios import device as ios_device
-                        ios_device.long_press(x, y, duration=3.0, wda_url=self.config.wda_url)
+                # Long press not in protocol - iOS uses long_press via device module
+                elif self.config.platform == "android":
+                    adb_controller.long_press(x, y, 3000, self.config.device_id)
+                else:
+                    from deepagents_cli.middleware.autoglm.ios import (
+                        device as ios_device,
+                    )
 
-                return {"success": True, "message": f"Executed {action_name} at ({x}, {y})"}
+                    ios_device.long_press(
+                        x, y, duration=3.0, wda_url=self.config.wda_url
+                    )
+
+                return {
+                    "success": True,
+                    "message": f"Executed {action_name} at ({x}, {y})",
+                }
 
             if action_name in ["Type", "Type_Name"]:
                 text = action.get("text", "")
@@ -1046,8 +1108,12 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                     # Platform-specific keyboard handling
                     if self.config.platform == "android":
                         # Switch to ADB keyboard and save original IME for cleanup
-                        original_ime = adb_controller.set_adb_keyboard(self.config.device_id)
-                        self._original_ime = original_ime  # Track for cleanup on interrupt
+                        original_ime = adb_controller.set_adb_keyboard(
+                            self.config.device_id
+                        )
+                        self._original_ime = (
+                            original_ime  # Track for cleanup on interrupt
+                        )
                         time.sleep(1.0)  # keyboard_switch_delay
 
                         # Clear existing text
@@ -1057,7 +1123,11 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                     # Log text length for debugging
                     if self.config.verbose:
                         print(f"[Type Action] Inputting text: {len(text)} characters")
-                        print(f"[Type Action] Text preview: {text[:100]}..." if len(text) > 100 else f"[Type Action] Text: {text}")
+                        print(
+                            f"[Type Action] Text preview: {text[:100]}..."
+                            if len(text) > 100
+                            else f"[Type Action] Text: {text}"
+                        )
 
                     # Type text via platform controller
                     self.controller.type_text(text)
@@ -1068,19 +1138,26 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                     else:
                         time.sleep(1.0)  # 1s for short text
 
-                    return {"success": True, "message": f"Typed: {len(text)} characters"}
+                    return {
+                        "success": True,
+                        "message": f"Typed: {len(text)} characters",
+                    }
 
                 finally:
                     # Restore keyboard (Android only)
                     if self.config.platform == "android":
                         try:
                             if self._original_ime:
-                                adb_controller.restore_keyboard(self._original_ime, self.config.device_id)
+                                adb_controller.restore_keyboard(
+                                    self._original_ime, self.config.device_id
+                                )
                                 time.sleep(0.5)  # keyboard_restore_delay
                                 self._original_ime = None  # Clear after restoration
                         except Exception as e:
                             if self.config.verbose:
-                                print(f"Warning: Failed to restore keyboard in Type action: {e}")
+                                print(
+                                    f"Warning: Failed to restore keyboard in Type action: {e}"
+                                )
 
             if action_name == "Swipe":
                 start = action.get("start")
@@ -1088,7 +1165,10 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 if not start or not end or len(start) != 2 or len(end) != 2:
                     return {"success": False, "message": "Invalid swipe coordinates"}
                 coordinate_mode = action.get("coordinate_mode")
-                if coordinate_mode == "pixel" or max(start[0], start[1], end[0], end[1]) > 1000:
+                if (
+                    coordinate_mode == "pixel"
+                    or max(start[0], start[1], end[0], end[1]) > 1000
+                ):
                     start_x = int(start[0])
                     start_y = int(start[1])
                     end_x = int(end[0])
@@ -1200,7 +1280,9 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             try:
                 # Convert duration from milliseconds to seconds for platform controller
                 duration_sec = duration_ms / 1000.0 if duration_ms else None
-                self.controller.swipe(start_x, start_y, end_x, end_y, duration=duration_sec)
+                self.controller.swipe(
+                    start_x, start_y, end_x, end_y, duration=duration_sec
+                )
                 return ToolMessage(
                     content=f"Swiped from ({start_x}, {start_y}) to ({end_x}, {end_y})",
                     tool_call_id=runtime.tool_call_id if runtime else None,
@@ -1256,7 +1338,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             try:
                 screenshot_base64, width, height = self.controller.take_screenshot()
                 screenshot_path = self.screenshot_dir / f"manual_{int(time.time())}.png"
-                with open(screenshot_path, "wb") as f:
+                with Path(screenshot_path).open("wb") as f:
                     # Decode base64 string to binary data for file writing
                     f.write(base64.b64decode(screenshot_base64))
                 return ToolMessage(
@@ -1359,15 +1441,17 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                     status="error",
                 )
 
-        tools.extend([
-            phone_tap_tool,
-            phone_swipe_tool,
-            phone_type_tool,
-            phone_screenshot_tool,
-            phone_back_tool,
-            phone_home_tool,
-            phone_launch_tool,
-        ])
+        tools.extend(
+            [
+                phone_tap_tool,
+                phone_swipe_tool,
+                phone_type_tool,
+                phone_screenshot_tool,
+                phone_back_tool,
+                phone_home_tool,
+                phone_launch_tool,
+            ]
+        )
 
         return tools
 
@@ -1418,4 +1502,4 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         return await handler(request.override(system_prompt=system_prompt))
 
 
-__all__ = ["AutoGLMMiddleware", "AutoGLMConfig"]
+__all__ = ["AutoGLMConfig", "AutoGLMMiddleware"]

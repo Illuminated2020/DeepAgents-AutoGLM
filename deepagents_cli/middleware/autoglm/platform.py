@@ -9,10 +9,12 @@ from typing import Protocol
 
 from . import adb_controller
 from .adb_controller import Screenshot
-from .ios import connection as ios_connection
-from .ios import device as ios_device
-from .ios import input as ios_input
-from .ios import screenshot as ios_screenshot
+from .ios import (
+    connection as ios_connection,
+    device as ios_device,
+    input as ios_input,
+    screenshot as ios_screenshot,
+)
 
 
 @dataclass
@@ -38,8 +40,7 @@ class PlatformController(Protocol):
     """
 
     def take_screenshot(self) -> Screenshot:
-        """
-        Capture a screenshot from the device.
+        """Capture a screenshot from the device.
 
         Returns:
             Screenshot object containing base64_data, width, height, and is_sensitive flag.
@@ -47,8 +48,7 @@ class PlatformController(Protocol):
         ...
 
     def tap(self, x: int, y: int) -> None:
-        """
-        Tap at the specified coordinates.
+        """Tap at the specified coordinates.
 
         Args:
             x: X coordinate.
@@ -64,8 +64,7 @@ class PlatformController(Protocol):
         end_y: int,
         duration: float | None = None,
     ) -> None:
-        """
-        Swipe from start to end coordinates.
+        """Swipe from start to end coordinates.
 
         Args:
             start_x: Starting X coordinate.
@@ -77,8 +76,7 @@ class PlatformController(Protocol):
         ...
 
     def type_text(self, text: str) -> None:
-        """
-        Type text at the currently focused input field.
+        """Type text at the currently focused input field.
 
         Args:
             text: The text to type.
@@ -86,8 +84,7 @@ class PlatformController(Protocol):
         ...
 
     def launch_app(self, app_name: str) -> bool:
-        """
-        Launch an app by name.
+        """Launch an app by name.
 
         Args:
             app_name: The app name.
@@ -106,8 +103,7 @@ class PlatformController(Protocol):
         ...
 
     def get_current_app(self) -> str:
-        """
-        Get the currently active app name.
+        """Get the currently active app name.
 
         Returns:
             The app name, or "System Home" if on home screen.
@@ -119,8 +115,7 @@ class AndroidController:
     """Platform controller for Android devices using ADB."""
 
     def __init__(self, config: PlatformConfig):
-        """
-        Initialize Android controller.
+        """Initialize Android controller.
 
         Args:
             config: Platform configuration.
@@ -180,9 +175,10 @@ class AndroidController:
 class IOSController:
     """Platform controller for iOS devices using WebDriverAgent."""
 
-    def __init__(self, config: PlatformConfig, app_packages: dict[str, str] | None = None):
-        """
-        Initialize iOS controller.
+    def __init__(
+        self, config: PlatformConfig, app_packages: dict[str, str] | None = None
+    ):
+        """Initialize iOS controller.
 
         Args:
             config: Platform configuration.
@@ -204,9 +200,7 @@ class IOSController:
 
     def tap(self, x: int, y: int) -> None:
         """Tap at the specified coordinates on iOS device."""
-        ios_device.tap(
-            x, y, wda_url=self.wda_url, session_id=self.session_id
-        )
+        ios_device.tap(x, y, wda_url=self.wda_url, session_id=self.session_id)
 
     def swipe(
         self,
@@ -229,9 +223,7 @@ class IOSController:
 
     def type_text(self, text: str) -> None:
         """Type text on iOS device using WebDriverAgent."""
-        ios_input.type_text(
-            text, wda_url=self.wda_url, session_id=self.session_id
-        )
+        ios_input.type_text(text, wda_url=self.wda_url, session_id=self.session_id)
 
     def launch_app(self, app_name: str) -> bool:
         """Launch an app on iOS device."""
@@ -259,9 +251,10 @@ class IOSController:
         )
 
 
-def create_controller(config: PlatformConfig, app_packages: dict[str, str] | None = None) -> PlatformController:
-    """
-    Factory function to create the appropriate platform controller.
+def create_controller(
+    config: PlatformConfig, app_packages: dict[str, str] | None = None
+) -> PlatformController:
+    """Factory function to create the appropriate platform controller.
 
     Args:
         config: Platform configuration.
@@ -291,7 +284,7 @@ def create_controller(config: PlatformConfig, app_packages: dict[str, str] | Non
 
         return AndroidController(config)
 
-    elif platform == "ios":
+    if platform == "ios":
         # Verify iOS requirements
         if not ios_connection.check_libimobiledevice():
             raise RuntimeError(
@@ -319,9 +312,8 @@ def create_controller(config: PlatformConfig, app_packages: dict[str, str] | Non
                 config.wda_session_id = session_id
                 print(f"✅ Created WDA session: {session_id}")
             else:
-                print(f"⚠️  Using default WDA session (no explicit session ID)")
+                print("⚠️  Using default WDA session (no explicit session ID)")
 
         return IOSController(config, app_packages)
 
-    else:
-        raise ValueError(f"Unknown platform: {platform}. Must be 'android' or 'ios'.")
+    raise ValueError(f"Unknown platform: {platform}. Must be 'android' or 'ios'.")

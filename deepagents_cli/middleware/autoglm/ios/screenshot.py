@@ -2,6 +2,7 @@
 
 import base64
 import os
+import pathlib
 import subprocess
 import tempfile
 import uuid
@@ -27,8 +28,7 @@ def get_screenshot(
     device_id: str | None = None,
     timeout: int = 10,
 ) -> Screenshot:
-    """
-    Capture a screenshot from the connected iOS device.
+    """Capture a screenshot from the connected iOS device.
 
     Args:
         wda_url: WebDriverAgent URL.
@@ -60,8 +60,7 @@ def get_screenshot(
 def _get_screenshot_wda(
     wda_url: str, session_id: str | None, timeout: int
 ) -> Screenshot | None:
-    """
-    Capture screenshot using WebDriverAgent.
+    """Capture screenshot using WebDriverAgent.
 
     Args:
         wda_url: WebDriverAgent URL.
@@ -76,7 +75,9 @@ def _get_screenshot_wda(
 
         url = f"{wda_url.rstrip('/')}/screenshot"
 
-        response = requests.get(url, timeout=timeout, verify=False, proxies={'http': None, 'https': None})
+        response = requests.get(
+            url, timeout=timeout, verify=False, proxies={"http": None, "https": None}
+        )
 
         if response.status_code == 200:
             data = response.json()
@@ -103,11 +104,8 @@ def _get_screenshot_wda(
     return None
 
 
-def _get_screenshot_idevice(
-    device_id: str | None, timeout: int
-) -> Screenshot | None:
-    """
-    Capture screenshot using idevicescreenshot (libimobiledevice).
+def _get_screenshot_idevice(device_id: str | None, timeout: int) -> Screenshot | None:
+    """Capture screenshot using idevicescreenshot (libimobiledevice).
 
     Args:
         device_id: Optional device UDID.
@@ -126,11 +124,9 @@ def _get_screenshot_idevice(
             cmd.extend(["-u", device_id])
         cmd.append(temp_path)
 
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
-        if result.returncode == 0 and os.path.exists(temp_path):
+        if result.returncode == 0 and pathlib.Path(temp_path).exists():
             # Read and encode image
             img = Image.open(temp_path)
             width, height = img.size
@@ -140,7 +136,7 @@ def _get_screenshot_idevice(
             base64_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
             # Cleanup
-            os.remove(temp_path)
+            pathlib.Path(temp_path).unlink()
 
             return Screenshot(
                 base64_data=base64_data, width=width, height=height, is_sensitive=False
@@ -157,8 +153,7 @@ def _get_screenshot_idevice(
 
 
 def _create_fallback_screenshot(is_sensitive: bool) -> Screenshot:
-    """
-    Create a black fallback image when screenshot fails.
+    """Create a black fallback image when screenshot fails.
 
     Args:
         is_sensitive: Whether the failure was due to sensitive content.
@@ -186,8 +181,7 @@ def save_screenshot(
     screenshot: Screenshot,
     file_path: str,
 ) -> bool:
-    """
-    Save a screenshot to a file.
+    """Save a screenshot to a file.
 
     Args:
         screenshot: Screenshot object.
@@ -211,8 +205,7 @@ def get_screenshot_png(
     session_id: str | None = None,
     device_id: str | None = None,
 ) -> bytes | None:
-    """
-    Get screenshot as PNG bytes.
+    """Get screenshot as PNG bytes.
 
     Args:
         wda_url: WebDriverAgent URL.

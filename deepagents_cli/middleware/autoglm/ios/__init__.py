@@ -4,19 +4,24 @@ This module provides iOS device control capabilities through WebDriverAgent
 and libimobiledevice.
 """
 
-from .connection import XCTestConnection, list_devices, check_libimobiledevice, is_wda_ready
+from .connection import (
+    XCTestConnection,
+    check_libimobiledevice,
+    is_wda_ready,
+    list_devices,
+)
 from .device import (
-    tap,
+    back,
     double_tap,
+    get_current_app,
+    home,
+    launch_app,
     long_press,
     swipe,
-    home,
-    back,
-    launch_app,
-    get_current_app,
+    tap,
 )
+from .input import clear_text, type_text
 from .screenshot import get_screenshot
-from .input import type_text, clear_text
 
 __all__ = [
     # Connection

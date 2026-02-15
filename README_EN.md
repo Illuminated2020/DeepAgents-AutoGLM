@@ -82,36 +82,6 @@ uv pip install -e .
 deepagents
 ```
 
-**Get help:**
-
-```bash
-deepagents help
-```
-
-**Common options:**
-
-```bash
-# Use specific Agent configuration
-deepagents --agent mybot
-
-# Create new Agent
-deepagents create mybot
-
-# List all Agents
-deepagents list
-
-# Auto-approve tool usage (skip manual confirmation prompts)
-deepagents --auto-approve
-
-# Execute code in remote sandbox (requires configuration)
-deepagents --sandbox modal        # or runloop, daytona
-deepagents --sandbox-id dbx_123   # Reuse existing sandbox
-
-# Manage skills
-deepagents skills list            # List all skills
-deepagents skills create my-skill # Create new skill
-```
-
 Type naturally as you would in a chat interface. The Agent will use its built-in tools, skills, and memory to help you complete tasks.
 
 ### Environment Variables Configuration
@@ -138,6 +108,14 @@ Then edit the `.env` file as needed. Here are the environment variable descripti
 | Environment Variable | Description | Example Values |
 |---------------------|-------------|----------------|
 | `OPENAI_BASE_URL` | API base URL (not required for official OpenAI service; must be set for other compatible services) | `https://api.deepseek.com/v1` |
+
+**Anthropic Configuration:**
+
+| Environment Variable | Description | Example Values |
+|---------------------|-------------|----------------|
+| `ANTHROPIC_API_KEY` | Anthropic API key (can use Kimi Coding Plan, ByteDance Ark Coding Plan, etc.) | `sk-ant-xxxx` |
+| `ANTHROPIC_BASE_URL` | Anthropic API base URL | `https://api.anthropic.com` |
+| `ANTHROPIC_MODEL` | Anthropic model name | `claude-4-5-sonnet` |
 
 **LangSmith Tracing (Optional):**
 
@@ -225,57 +203,6 @@ If you need Android or iOS device automation features, install AutoGLM support.
 
 **Complete Configuration Guide:** 📚 [AutoGLM Setup Guide](docs/autoglm_setup_en.md)
 
-## Built-in Tools
-
-The Agent comes with the following built-in tools (usable without configuration):
-
-### Basic Tools
-
-| Tool | Description |
-|------|-------------|
-| `ls` | List files and directories |
-| `read_file` | Read file contents |
-| `write_file` | Create or overwrite file |
-| `edit_file` | Make targeted edits to existing files |
-| `glob` | Find files matching patterns (e.g., `**/*.py`) |
-| `grep` | Search text patterns across files |
-| `shell` | Execute shell commands (local mode) |
-| `execute` | Execute commands in remote sandbox (sandbox mode) |
-| `web_search` | Search the web using Tavily API |
-| `fetch_url` | Fetch webpage and convert to Markdown |
-| `task` | Delegate work to sub-agents for parallel execution |
-| `write_todos` | Create and manage task lists for complex work |
-
-### AutoGLM Tools (Requires `AUTOGLM_ENABLED=true`)
-
-| Tool | Description |
-|------|-------------|
-| `phone_task` | 🎯 **Advanced Task Tool** - Execute natural language phone tasks (Recommended) |
-| `phone_tap` | Tap at specified coordinates |
-| `phone_swipe` | Execute swipe gesture |
-| `phone_type` | Input text |
-| `phone_screenshot` | Capture screen |
-| `phone_back` | Press back button |
-| `phone_home` | Press home button |
-| `phone_launch` | Launch app by name |
-
-> [!WARNING]
-> **Human-in-the-Loop (HITL) Requirements**
->
-> Potentially destructive operations require user approval before execution:
->
-> - **File operations**: `write_file`, `edit_file`
-> - **Command execution**: `shell`, `execute`
-> - **External requests**: `web_search`, `fetch_url`
-> - **Delegation**: `task` (sub-agents)
-> - **Phone operations**: `phone_task`, `phone_tap`, `phone_swipe`, etc.
->
-> Each operation will display details and prompt for approval. Use `--auto-approve` to skip prompts:
->
-> ```bash
-> deepagents --auto-approve
-> ```
-
 ## Agent Configuration
 
 Each Agent has its own configuration directory `~/.deepagents/<agent_name>/`, defaulting to `agent`.
@@ -287,49 +214,6 @@ deepagents list
 # Create new Agent
 deepagents create <agent_name>
 ```
-
-## Customization
-
-There are two main ways to customize your Agent: **memory** and **skills**.
-
-Each Agent has its own global configuration directory `~/.deepagents/<agent_name>/`:
-
-```
-~/.deepagents/<agent_name>/
-  ├── agent.md              # Auto-loaded global personality/style
-  └── skills/               # Auto-loaded Agent-specific skills
-      ├── web-research/
-      │   └── SKILL.md
-      └── langgraph-docs/
-          └── SKILL.md
-```
-
-Projects can extend global configuration with project-specific instructions and skills:
-
-```
-my-project/
-  ├── .git/
-  └── .deepagents/
-      ├── agent.md          # Project-specific instructions
-      ├── .env              # Project-specific environment config (AutoGLM, etc.)
-      └── skills/           # Project-specific skills
-          └── custom-tool/
-              └── SKILL.md
-```
-
-The CLI automatically detects the project root directory (via `.git`) and loads:
-
-- Project-specific `agent.md` (from `[project root]/.deepagents/agent.md`)
-- Project-specific skills (from `[project root]/.deepagents/skills/`)
-- Project-specific environment config (from `[project root]/.deepagents/.env`)
-
-Global and project configurations load together, allowing you to:
-
-- Maintain general coding style/preferences in global agent.md
-- Add project-specific context, conventions, or guidelines in project agent.md
-- Share project-specific skills through version control
-- Override global skills with project-specific versions (when skill names match)
-- Configure different AutoGLM settings for different projects
 
 ### agent.md File
 
@@ -355,15 +239,6 @@ The `agent.md` file provides persistent memory, automatically loaded at the star
 
 - Both files load at startup and inject as `<user_memory>` and `<project_memory>` into system prompt
 - Adds [memory management instructions](deepagents_cli/agent_memory.py#L44-L158) explaining when/how to update memory files
-
-**When Agent updates memory:**
-
-- **Immediately** when you describe how it should behave
-- **Immediately** when you give feedback on its work
-- When you explicitly ask it to remember something
-- When patterns or preferences emerge from interactions
-
-Agent uses `edit_file` to update memory when learning preferences or receiving feedback.
 
 ### Project Memory Files
 
@@ -393,13 +268,6 @@ In addition to `agent.md`, you can create additional memory files in `.deepagent
 - When you reference past work or patterns
 - When executing tasks that match saved knowledge domains
 
-**Advantages:**
-
-- **Persistent learning**: Agent remembers project patterns across sessions
-- **Team collaboration**: Share project knowledge through version control
-- **Context retrieval**: Only load relevant memory when needed (reduces token usage)
-- **Structured knowledge**: Organize information by domain (API, architecture, deployment, etc.)
-
 ### Skills
 
 Skills are reusable Agent capabilities that provide specialized workflows and domain knowledge. Example skills are provided in the `examples/skills/` directory:
@@ -421,42 +289,9 @@ cp -r examples/skills/web-research ~/.deepagents/agent/skills/
 cp -r examples/skills/* ~/.deepagents/agent/skills/
 ```
 
-Manage skills:
-
-```bash
-# List all skills (global + project)
-deepagents skills list
-
-# List only project skills
-deepagents skills list --project
-
-# Create new global skill from template
-deepagents skills create my-skill
-
-# Create new project skill
-deepagents skills create my-tool --project
-
-# View skill details
-deepagents skills info web-research
-
-# View only project skill info
-deepagents skills info my-tool --project
-```
-
 To use a skill (e.g., langgraph-docs skill), simply enter a request related to the skill, and it will be automatically used.
 
-```bash
-$ deepagents
-$ "Create an agent.py script implementing a LangGraph Agent"
-```
-
 Skills follow Anthropic's [progressive disclosure pattern](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills) - the Agent knows skills exist but only reads full instructions when needed.
-
-1. **At startup** - SkillsMiddleware scans `~/.deepagents/agent/skills/` and `.deepagents/skills/` directories
-2. **Parse metadata** - Extracts YAML frontmatter (name + description) from each `SKILL.md` file
-3. **Inject prompt** - Adds skill list with descriptions to system prompt: "Available skills: web-research - for web research tasks..."
-4. **Progressive loading** - Agent only uses `read_file` to read full `SKILL.md` content when task matches skill description
-5. **Execute workflow** - Agent follows step-by-step instructions in skill file
 
 ## Roadmap
 
@@ -469,10 +304,10 @@ Skills follow Anthropic's [progressive disclosure pattern](https://www.anthropic
 - ✅ Improved AutoGLM interrupt handling mechanism
 - ✅ iOS device support
 - ✅ Android sensitive screen detection and manual intervention (password input, payment confirmation, etc.)
+- ✅ Sync official DeepAgents-CLI updates
 
 ### 🚧 In Progress / 📋 Planned
 
-- 🚧 `phone_task` may need to return more specific ToolMessage when interrupted, optimization under consideration
 - 📋 More phone operation skills (**Contributions welcome!**)
 
 ## Contributing
@@ -503,6 +338,8 @@ deepagents
 2. Use `deepagents skills create <skill-name>` to create skill framework
 3. Write `SKILL.md` (including YAML metadata and usage instructions)
 4. Submit Pull Request to `examples/skills/` directory
+
+For more information about DeepAgents-CLI and related topics, see the [CLI documentation](https://docs.langchain.com/oss/python/deepagents/cli).
 
 ## Acknowledgments
 

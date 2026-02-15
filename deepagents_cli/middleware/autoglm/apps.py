@@ -560,8 +560,7 @@ APP_PACKAGES_IOS: dict[str, str] = {
 
 
 def get_bundle_id(app_name: str) -> str | None:
-    """
-    Get the iOS bundle ID for an app name.
+    """Get the iOS bundle ID for an app name.
 
     Args:
         app_name: The display name of the app.

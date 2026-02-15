@@ -182,7 +182,9 @@ class BaseSandboxIntegrationTest(ABC):
     @pytest.mark.skip(
         reason="Error handling not yet implemented in sandbox providers - requires implementation"
     )
-    def test_download_error_file_not_found(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_download_error_file_not_found(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test downloading a non-existent file returns file_not_found error.
 
         Expected behavior: download_files should return FileDownloadResponse with
@@ -217,7 +219,9 @@ class BaseSandboxIntegrationTest(ABC):
     @pytest.mark.skip(
         reason="Error handling not yet implemented in sandbox providers - requires implementation"
     )
-    def test_upload_error_parent_not_found(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_upload_error_parent_not_found(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test uploading to a path with non-existent parent returns parent_not_found error.
 
         Expected behavior: upload_files should return FileUploadResponse with
@@ -232,7 +236,9 @@ class BaseSandboxIntegrationTest(ABC):
         sandbox.upload_files([("/tmp/parent_is_file.txt", b"I am a file")])
 
         # Now try to upload as if parent_is_file.txt were a directory
-        responses = sandbox.upload_files([("/tmp/parent_is_file.txt/child.txt", b"child")])
+        responses = sandbox.upload_files(
+            [("/tmp/parent_is_file.txt/child.txt", b"child")]
+        )
 
         assert len(responses) == 1
         assert responses[0].path == "/tmp/parent_is_file.txt/child.txt"
@@ -275,7 +281,9 @@ class BaseSandboxIntegrationTest(ABC):
     @pytest.mark.skip(
         reason="Error handling not yet implemented in sandbox providers - requires implementation"
     )
-    def test_upload_to_existing_directory_path(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_upload_to_existing_directory_path(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test uploading to a path that is an existing directory.
 
         Expected behavior: This should either succeed by overwriting or return

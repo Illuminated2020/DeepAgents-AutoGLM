@@ -39,7 +39,9 @@ class FixedGenericFakeChatModel(GenericFakeChatModel):
 
 
 @contextmanager
-def mock_settings(tmp_path: Path, assistant_id: str = "test-agent") -> Generator[Path, None, None]:
+def mock_settings(
+    tmp_path: Path, assistant_id: str = "test-agent"
+) -> Generator[Path, None, None]:
     """Context manager for patching CLI settings with temporary directories.
 
     Args:

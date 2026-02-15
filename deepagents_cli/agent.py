@@ -559,13 +559,14 @@ def create_cli_agent(
 
         if settings.has_autoglm:
             import importlib
+
             from deepagents_cli.middleware.autoglm_middleware import (
                 AutoGLMConfig,
                 AutoGLMMiddleware,
             )
 
             chat_openai_module = importlib.import_module("langchain_openai")
-            chat_openai_class = getattr(chat_openai_module, "ChatOpenAI")
+            chat_openai_class = chat_openai_module.ChatOpenAI
             vision_model = chat_openai_class(
                 base_url=settings.autoglm_vision_model_url,
                 model=settings.autoglm_vision_model_name,

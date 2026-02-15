@@ -11,7 +11,6 @@ Files: phone_agent/model/client.py, phone_agent/actions/handler.py
 """
 
 import ast
-import re
 from typing import Any
 
 
@@ -33,7 +32,7 @@ def parse_response(response: str) -> tuple[str, str]:
         - action: The action command to execute
 
     Examples:
-        >>> thinking, action = parse_response("Let me tap the button\\ndo(action=\"Tap\", element=[500, 300])")
+        >>> thinking, action = parse_response('Let me tap the button\\ndo(action="Tap", element=[500, 300])')
         >>> print(thinking)
         "Let me tap the button"
         >>> print(action)
@@ -139,9 +138,9 @@ def parse_action(action_str: str) -> dict[str, Any]:
             try:
                 # Escape special characters (newlines, tabs, etc.) for valid Python syntax
                 # This handles cases where model output contains unescaped newlines
-                action_str = action_str.replace('\n', '\\n')
-                action_str = action_str.replace('\r', '\\r')
-                action_str = action_str.replace('\t', '\\t')
+                action_str = action_str.replace("\n", "\\n")
+                action_str = action_str.replace("\r", "\\r")
+                action_str = action_str.replace("\t", "\\t")
 
                 # Parse the function call as an expression
                 tree = ast.parse(action_str, mode="eval")
@@ -282,7 +281,10 @@ def validate_action(action: dict[str, Any]) -> tuple[bool, str | None]:
                 return False, f"{action_name} action missing 'element' parameter"
             element = action.get("element")
             if not isinstance(element, list) or len(element) != 2:
-                return False, f"{action_name} action 'element' must be [x, y] coordinates"
+                return (
+                    False,
+                    f"{action_name} action 'element' must be [x, y] coordinates",
+                )
 
         elif action_name == "Swipe":
             if "start" not in action or "end" not in action:

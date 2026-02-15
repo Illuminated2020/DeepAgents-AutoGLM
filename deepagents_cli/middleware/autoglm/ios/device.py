@@ -6,8 +6,7 @@ SCALE_FACTOR = 3  # 3 for most modern iPhone
 
 
 def _get_wda_session_url(wda_url: str, session_id: str | None, endpoint: str) -> str:
-    """
-    Get the correct WDA URL for a session endpoint.
+    """Get the correct WDA URL for a session endpoint.
 
     Args:
         wda_url: Base WDA URL.
@@ -20,9 +19,8 @@ def _get_wda_session_url(wda_url: str, session_id: str | None, endpoint: str) ->
     base = wda_url.rstrip("/")
     if session_id:
         return f"{base}/session/{session_id}/{endpoint}"
-    else:
-        # Try to use WDA endpoints without session when possible
-        return f"{base}/{endpoint}"
+    # Try to use WDA endpoints without session when possible
+    return f"{base}/{endpoint}"
 
 
 def get_current_app(
@@ -30,8 +28,7 @@ def get_current_app(
     session_id: str | None = None,
     app_packages: dict[str, str] | None = None,
 ) -> str:
-    """
-    Get the currently active app bundle ID and name.
+    """Get the currently active app bundle ID and name.
 
     Args:
         wda_url: WebDriverAgent URL.
@@ -49,7 +46,7 @@ def get_current_app(
             f"{wda_url.rstrip('/')}/wda/activeAppInfo",
             timeout=5,
             verify=False,
-            proxies={'http': None, 'https': None}
+            proxies={"http": None, "https": None},
         )
 
         if response.status_code == 200:
@@ -82,8 +79,7 @@ def tap(
     session_id: str | None = None,
     delay: float = 1.0,
 ) -> None:
-    """
-    Tap at the specified coordinates using WebDriver W3C Actions API.
+    """Tap at the specified coordinates using WebDriver W3C Actions API.
 
     Args:
         x: X coordinate.
@@ -119,7 +115,13 @@ def tap(
             ]
         }
 
-        requests.post(url, json=actions, timeout=15, verify=False, proxies={'http': None, 'https': None})
+        requests.post(
+            url,
+            json=actions,
+            timeout=15,
+            verify=False,
+            proxies={"http": None, "https": None},
+        )
 
         time.sleep(delay)
 
@@ -136,8 +138,7 @@ def double_tap(
     session_id: str | None = None,
     delay: float = 1.0,
 ) -> None:
-    """
-    Double tap at the specified coordinates using WebDriver W3C Actions API.
+    """Double tap at the specified coordinates using WebDriver W3C Actions API.
 
     Args:
         x: X coordinate.
@@ -177,7 +178,13 @@ def double_tap(
             ]
         }
 
-        requests.post(url, json=actions, timeout=10, verify=False, proxies={'http': None, 'https': None})
+        requests.post(
+            url,
+            json=actions,
+            timeout=10,
+            verify=False,
+            proxies={"http": None, "https": None},
+        )
 
         time.sleep(delay)
 
@@ -195,8 +202,7 @@ def long_press(
     session_id: str | None = None,
     delay: float = 1.0,
 ) -> None:
-    """
-    Long press at the specified coordinates using WebDriver W3C Actions API.
+    """Long press at the specified coordinates using WebDriver W3C Actions API.
 
     Args:
         x: X coordinate.
@@ -256,8 +262,7 @@ def swipe(
     session_id: str | None = None,
     delay: float = 1.0,
 ) -> None:
-    """
-    Swipe from start to end coordinates using WDA dragfromtoforduration endpoint.
+    """Swipe from start to end coordinates using WDA dragfromtoforduration endpoint.
 
     Args:
         start_x: Starting X coordinate.
@@ -289,7 +294,13 @@ def swipe(
             "duration": duration,
         }
 
-        requests.post(url, json=payload, timeout=int(duration + 10), verify=False, proxies={'http': None, 'https': None})
+        requests.post(
+            url,
+            json=payload,
+            timeout=int(duration + 10),
+            verify=False,
+            proxies={"http": None, "https": None},
+        )
 
         time.sleep(delay)
 
@@ -304,8 +315,7 @@ def back(
     session_id: str | None = None,
     delay: float = 1.0,
 ) -> None:
-    """
-    Navigate back (swipe from left edge).
+    """Navigate back (swipe from left edge).
 
     Args:
         wda_url: WebDriverAgent URL.
@@ -345,8 +355,7 @@ def home(
     session_id: str | None = None,
     delay: float = 1.0,
 ) -> None:
-    """
-    Press the home button.
+    """Press the home button.
 
     Args:
         wda_url: WebDriverAgent URL.
@@ -358,7 +367,9 @@ def home(
 
         url = f"{wda_url.rstrip('/')}/wda/homescreen"
 
-        requests.post(url, timeout=10, verify=False, proxies={'http': None, 'https': None})
+        requests.post(
+            url, timeout=10, verify=False, proxies={"http": None, "https": None}
+        )
 
         time.sleep(delay)
 
@@ -375,8 +386,7 @@ def launch_app(
     delay: float = 1.0,
     app_packages: dict[str, str] | None = None,
 ) -> bool:
-    """
-    Launch an app by name.
+    """Launch an app by name.
 
     Args:
         app_name: The app name (must be in app_packages dictionary).
@@ -391,6 +401,7 @@ def launch_app(
     if app_packages is None:
         # Import default iOS app packages if not provided
         from deepagents_cli.middleware.autoglm.apps import APP_PACKAGES_IOS
+
         app_packages = APP_PACKAGES_IOS
 
     if app_name not in app_packages:
@@ -403,7 +414,11 @@ def launch_app(
         url = _get_wda_session_url(wda_url, session_id, "wda/apps/launch")
 
         response = requests.post(
-            url, json={"bundleId": bundle_id}, timeout=10, verify=False, proxies={'http': None, 'https': None}
+            url,
+            json={"bundleId": bundle_id},
+            timeout=10,
+            verify=False,
+            proxies={"http": None, "https": None},
         )
 
         time.sleep(delay)
@@ -420,8 +435,7 @@ def launch_app(
 def get_screen_size(
     wda_url: str = "http://localhost:8100", session_id: str | None = None
 ) -> tuple[int, int]:
-    """
-    Get the screen dimensions.
+    """Get the screen dimensions.
 
     Args:
         wda_url: WebDriverAgent URL.
@@ -435,7 +449,9 @@ def get_screen_size(
 
         url = _get_wda_session_url(wda_url, session_id, "window/size")
 
-        response = requests.get(url, timeout=5, verify=False, proxies={'http': None, 'https': None})
+        response = requests.get(
+            url, timeout=5, verify=False, proxies={"http": None, "https": None}
+        )
 
         if response.status_code == 200:
             data = response.json()
@@ -459,8 +475,7 @@ def press_button(
     session_id: str | None = None,
     delay: float = 1.0,
 ) -> None:
-    """
-    Press a physical button.
+    """Press a physical button.
 
     Args:
         button_name: Button name (e.g., "home", "volumeUp", "volumeDown").
@@ -473,7 +488,13 @@ def press_button(
 
         url = f"{wda_url.rstrip('/')}/wda/pressButton"
 
-        requests.post(url, json={"name": button_name}, timeout=10, verify=False, proxies={'http': None, 'https': None})
+        requests.post(
+            url,
+            json={"name": button_name},
+            timeout=10,
+            verify=False,
+            proxies={"http": None, "https": None},
+        )
 
         time.sleep(delay)
 

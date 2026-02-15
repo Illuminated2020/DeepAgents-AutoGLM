@@ -25,8 +25,7 @@ class DeviceInfo:
 
 
 class XCTestConnection:
-    """
-    Manages connections to iOS devices via libimobiledevice and WebDriverAgent.
+    """Manages connections to iOS devices via libimobiledevice and WebDriverAgent.
 
     Requires:
         - libimobiledevice (idevice_id, ideviceinfo)
@@ -44,8 +43,7 @@ class XCTestConnection:
     """
 
     def __init__(self, wda_url: str = "http://localhost:8100"):
-        """
-        Initialize iOS connection manager.
+        """Initialize iOS connection manager.
 
         Args:
             wda_url: WebDriverAgent URL (default: http://localhost:8100).
@@ -54,8 +52,7 @@ class XCTestConnection:
         self.wda_url = wda_url.rstrip("/")
 
     def list_devices(self) -> list[DeviceInfo]:
-        """
-        List all connected iOS devices.
+        """List all connected iOS devices.
 
         Returns:
             List of DeviceInfo objects.
@@ -112,8 +109,7 @@ class XCTestConnection:
             return []
 
     def _get_device_details(self, udid: str) -> dict[str, str]:
-        """
-        Get detailed information about a specific device.
+        """Get detailed information about a specific device.
 
         Args:
             udid: Device UDID.
@@ -149,8 +145,7 @@ class XCTestConnection:
             return {}
 
     def get_device_info(self, device_id: str | None = None) -> DeviceInfo | None:
-        """
-        Get detailed information about a device.
+        """Get detailed information about a device.
 
         Args:
             device_id: Device UDID. If None, uses first available device.
@@ -173,8 +168,7 @@ class XCTestConnection:
         return None
 
     def is_connected(self, device_id: str | None = None) -> bool:
-        """
-        Check if a device is connected.
+        """Check if a device is connected.
 
         Args:
             device_id: Device UDID to check. If None, checks if any device is connected.
@@ -193,8 +187,7 @@ class XCTestConnection:
         return any(d.device_id == device_id for d in devices)
 
     def is_wda_ready(self, timeout: int = 2) -> bool:
-        """
-        Check if WebDriverAgent is running and accessible.
+        """Check if WebDriverAgent is running and accessible.
 
         Args:
             timeout: Request timeout in seconds.
@@ -206,20 +199,20 @@ class XCTestConnection:
             import requests
 
             response = requests.get(
-                f"{self.wda_url}/status", timeout=timeout, verify=False, proxies={'http': None, 'https': None}
+                f"{self.wda_url}/status",
+                timeout=timeout,
+                verify=False,
+                proxies={"http": None, "https": None},
             )
             return response.status_code == 200
         except ImportError:
-            print(
-                "Error: requests library not found. Install it: pip install requests"
-            )
+            print("Error: requests library not found. Install it: pip install requests")
             return False
         except Exception:
             return False
 
     def start_wda_session(self) -> tuple[bool, str]:
-        """
-        Start a new WebDriverAgent session.
+        """Start a new WebDriverAgent session.
 
         Returns:
             Tuple of (success, session_id or error_message).
@@ -232,7 +225,7 @@ class XCTestConnection:
                 json={"capabilities": {}},
                 timeout=30,
                 verify=False,
-                proxies={'http': None, 'https': None}
+                proxies={"http": None, "https": None},
             )
 
             if response.status_code in (200, 201):
@@ -241,8 +234,7 @@ class XCTestConnection:
                     "sessionId"
                 )
                 return True, session_id or "session_started"
-            else:
-                return False, f"Failed to start session: {response.text}"
+            return False, f"Failed to start session: {response.text}"
 
         except ImportError:
             return (
@@ -253,8 +245,7 @@ class XCTestConnection:
             return False, f"Error starting WDA session: {e}"
 
     def get_wda_status(self) -> dict | None:
-        """
-        Get WebDriverAgent status information.
+        """Get WebDriverAgent status information.
 
         Returns:
             Status dictionary or None if not available.
@@ -262,7 +253,12 @@ class XCTestConnection:
         try:
             import requests
 
-            response = requests.get(f"{self.wda_url}/status", timeout=5, verify=False, proxies={'http': None, 'https': None})
+            response = requests.get(
+                f"{self.wda_url}/status",
+                timeout=5,
+                verify=False,
+                proxies={"http": None, "https": None},
+            )
 
             if response.status_code == 200:
                 return response.json()
@@ -272,8 +268,7 @@ class XCTestConnection:
             return None
 
     def pair_device(self, device_id: str | None = None) -> tuple[bool, str]:
-        """
-        Pair with an iOS device (required for some operations).
+        """Pair with an iOS device (required for some operations).
 
         Args:
             device_id: Device UDID. If None, uses first available device.
@@ -293,8 +288,7 @@ class XCTestConnection:
 
             if "SUCCESS" in output or "already paired" in output.lower():
                 return True, "Device paired successfully"
-            else:
-                return False, output.strip()
+            return False, output.strip()
 
         except FileNotFoundError:
             return (
@@ -305,8 +299,7 @@ class XCTestConnection:
             return False, f"Error pairing device: {e}"
 
     def get_device_name(self, device_id: str | None = None) -> str | None:
-        """
-        Get the device name.
+        """Get the device name.
 
         Args:
             device_id: Device UDID. If None, uses first available device.
@@ -329,8 +322,7 @@ class XCTestConnection:
             return None
 
     def restart_wda(self) -> tuple[bool, str]:
-        """
-        Restart WebDriverAgent (requires manual restart on device).
+        """Restart WebDriverAgent (requires manual restart on device).
 
         Returns:
             Tuple of (success, message).
@@ -341,16 +333,14 @@ class XCTestConnection:
         """
         if self.is_wda_ready():
             return True, "WDA is already running"
-        else:
-            return (
-                False,
-                "WDA is not running. Please start it manually on the device.",
-            )
+        return (
+            False,
+            "WDA is not running. Please start it manually on the device.",
+        )
 
 
 def quick_connect(wda_url: str = "http://localhost:8100") -> tuple[bool, str]:
-    """
-    Quick helper to check iOS device connection and WDA status.
+    """Quick helper to check iOS device connection and WDA status.
 
     Args:
         wda_url: WebDriverAgent URL.
@@ -372,8 +362,7 @@ def quick_connect(wda_url: str = "http://localhost:8100") -> tuple[bool, str]:
 
 
 def list_devices() -> list[DeviceInfo]:
-    """
-    Quick helper to list connected iOS devices.
+    """Quick helper to list connected iOS devices.
 
     Returns:
         List of DeviceInfo objects.
@@ -383,8 +372,7 @@ def list_devices() -> list[DeviceInfo]:
 
 
 def check_libimobiledevice() -> bool:
-    """
-    Check if libimobiledevice tools are available.
+    """Check if libimobiledevice tools are available.
 
     Returns:
         True if libimobiledevice is installed, False otherwise.
@@ -401,8 +389,7 @@ def check_libimobiledevice() -> bool:
 
 
 def is_wda_ready(wda_url: str = "http://localhost:8100") -> bool:
-    """
-    Quick helper to check if WebDriverAgent is ready.
+    """Quick helper to check if WebDriverAgent is ready.
 
     Args:
         wda_url: WebDriverAgent URL.

@@ -27,8 +27,7 @@ import pytest
 from langgraph.checkpoint.memory import MemorySaver
 from rich.console import Console
 
-from deepagents_cli import config as config_module
-from deepagents_cli import main as main_module
+from deepagents_cli import config as config_module, main as main_module
 from deepagents_cli.agent import create_cli_agent
 from deepagents_cli.config import SessionState, create_model
 from deepagents_cli.main import simple_cli
@@ -171,10 +170,14 @@ class TestSimpleTasks:
         ):
             # Verify the file was created
             output_file = work_dir / "foo.md"
-            assert output_file.exists(), f"foo.md should have been created in {work_dir}"
+            assert output_file.exists(), (
+                f"foo.md should have been created in {work_dir}"
+            )
 
             content = output_file.read_text()
-            assert "hello" in content.lower(), f"File should contain 'hello', but got: {content!r}"
+            assert "hello" in content.lower(), (
+                f"File should contain 'hello', but got: {content!r}"
+            )
 
             # Verify console output shows auto-approve mode
             # Print output for debugging if assertion fails
@@ -252,7 +255,9 @@ class TestAgentBehavior:
                 assert len(events) > 0, "Expected to receive events from agent stream"
 
                 # Verify that an interrupt occurred (shell tool requires approval)
-                assert "__interrupt__" in result, "Expected shell tool to trigger HITL interrupt"
+                assert "__interrupt__" in result, (
+                    "Expected shell tool to trigger HITL interrupt"
+                )
                 assert result["__interrupt__"] is not None
 
                 # Extract interrupt information
@@ -263,7 +268,9 @@ class TestAgentBehavior:
                 action_requests = interrupt_value.get("action_requests", [])
 
                 # Verify that a shell tool call is present
-                shell_calls = [req for req in action_requests if req.get("name") == "shell"]
+                shell_calls = [
+                    req for req in action_requests if req.get("name") == "shell"
+                ]
                 assert len(shell_calls) > 0, "Expected at least one shell tool call"
 
                 # Verify the shell command is "make format" (not "run make format")

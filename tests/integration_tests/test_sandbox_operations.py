@@ -32,7 +32,9 @@ class TestSandboxOperations:
     @pytest.fixture(autouse=True)
     def setup_test_dir(self, sandbox: SandboxBackendProtocol) -> None:
         """Set up a clean test directory before each test."""
-        sandbox.execute("rm -rf /tmp/test_sandbox_ops && mkdir -p /tmp/test_sandbox_ops")
+        sandbox.execute(
+            "rm -rf /tmp/test_sandbox_ops && mkdir -p /tmp/test_sandbox_ops"
+        )
 
     # ==================== write() tests ====================
 
@@ -97,7 +99,9 @@ class TestSandboxOperations:
 
         assert result.error is None
         # Verify file exists but is empty
-        exec_result = sandbox.execute(f"[ -f {test_path} ] && echo 'exists' || echo 'missing'")
+        exec_result = sandbox.execute(
+            f"[ -f {test_path} ] && echo 'exists' || echo 'missing'"
+        )
         assert "exists" in exec_result.output
 
     def test_write_path_with_spaces(self, sandbox: SandboxBackendProtocol) -> None:
@@ -124,7 +128,9 @@ class TestSandboxOperations:
         exec_result = sandbox.execute(f"cat {test_path}")
         assert exec_result.output.strip() == content
 
-    def test_write_consecutive_slashes_in_path(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_write_consecutive_slashes_in_path(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test that paths with consecutive slashes are handled correctly."""
         test_path = "/tmp//test_sandbox_ops///file.txt"
         content = "Content"
@@ -149,7 +155,9 @@ class TestSandboxOperations:
         # wc -l counts newlines, so 1000 lines = 999 newlines if last line has no newline
         assert "999" in exec_result.output or "1000" in exec_result.output
 
-    def test_write_content_with_only_newlines(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_write_content_with_only_newlines(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test writing content that consists only of newlines."""
         test_path = "/tmp/test_sandbox_ops/only_newlines.txt"
         content = "\n\n\n\n\n"
@@ -248,7 +256,9 @@ class TestSandboxOperations:
         assert "世界" in result
         assert "Привет" in result
 
-    def test_read_file_with_very_long_lines(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_read_file_with_very_long_lines(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test reading a file with lines longer than 2000 characters."""
         test_path = "/tmp/test_sandbox_ops/long_lines.txt"
         # Create a line with 3000 characters
@@ -273,7 +283,9 @@ class TestSandboxOperations:
         # Should return empty or no content lines
         assert "Line 1" not in result or result.strip() == ""
 
-    def test_read_offset_beyond_file_length(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_read_offset_beyond_file_length(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test reading with offset beyond the file length."""
         test_path = "/tmp/test_sandbox_ops/offset_beyond.txt"
         content = "Line 1\nLine 2\nLine 3"
@@ -287,7 +299,9 @@ class TestSandboxOperations:
         assert "Line 2" not in result
         assert "Line 3" not in result
 
-    def test_read_offset_at_exact_file_length(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_read_offset_at_exact_file_length(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test reading with offset exactly at file length."""
         test_path = "/tmp/test_sandbox_ops/offset_exact.txt"
         content = "\n".join([f"Line {i}" for i in range(1, 6)])  # 5 lines
@@ -299,7 +313,9 @@ class TestSandboxOperations:
         assert "Line 1" not in result
         assert "Line 5" not in result
 
-    def test_read_very_large_file_in_chunks(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_read_very_large_file_in_chunks(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test reading a large file in chunks using offset and limit."""
         test_path = "/tmp/test_sandbox_ops/large_chunked.txt"
         # Create 1000 line file
@@ -473,7 +489,9 @@ class TestSandboxOperations:
         assert "🌍" in file_content
         assert "👋" not in file_content
 
-    def test_edit_whitespace_only_strings(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_edit_whitespace_only_strings(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test editing with whitespace-only strings."""
         test_path = "/tmp/test_sandbox_ops/edit_whitespace.txt"
         content = "Line1    Line2"  # 4 spaces
@@ -502,7 +520,9 @@ class TestSandboxOperations:
         assert "y" * 100 in file_content  # Check partial presence
         assert "x" * 100 not in file_content
 
-    def test_edit_line_ending_preservation(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_edit_line_ending_preservation(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test that edit preserves line endings correctly."""
         test_path = "/tmp/test_sandbox_ops/edit_line_endings.txt"
         content = "Line 1\nLine 2\nLine 3\n"
@@ -563,7 +583,9 @@ class TestSandboxOperations:
 
         assert result == []
 
-    def test_ls_info_nonexistent_directory(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_ls_info_nonexistent_directory(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test listing a directory that doesn't exist."""
         nonexistent_dir = "/tmp/test_sandbox_ops/does_not_exist"
 
@@ -584,7 +606,9 @@ class TestSandboxOperations:
         assert ".hidden" in paths
         assert "visible.txt" in paths
 
-    def test_ls_info_directory_with_spaces(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_ls_info_directory_with_spaces(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test listing a directory that has spaces in file/dir names."""
         base_dir = "/tmp/test_sandbox_ops/ls_spaces"
         sandbox.execute(f"mkdir -p '{base_dir}'")
@@ -627,7 +651,9 @@ class TestSandboxOperations:
         assert "file_000.txt" in paths
         assert "file_049.txt" in paths
 
-    def test_ls_info_path_with_trailing_slash(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_ls_info_path_with_trailing_slash(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test that trailing slash in path is handled correctly."""
         base_dir = "/tmp/test_sandbox_ops/ls_trailing"
         sandbox.execute(f"mkdir -p {base_dir}")
@@ -639,7 +665,9 @@ class TestSandboxOperations:
         # Should work the same as without trailing slash
         assert len(result) >= 1 or result == []  # Implementation dependent
 
-    def test_ls_info_special_characters_in_filenames(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_ls_info_special_characters_in_filenames(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test listing files with special characters in names."""
         base_dir = "/tmp/test_sandbox_ops/ls_special"
         sandbox.execute(f"mkdir -p {base_dir}")
@@ -702,7 +730,9 @@ class TestSandboxOperations:
         assert isinstance(result, list)
         assert len(result) == 0
 
-    def test_grep_multiple_matches_per_file(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_grep_multiple_matches_per_file(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test grep with multiple matches in a single file."""
         base_dir = "/tmp/test_sandbox_ops/grep_multi"
         sandbox.execute(f"mkdir -p {base_dir}")
@@ -717,7 +747,9 @@ class TestSandboxOperations:
         line_numbers = [match["line"] for match in result]
         assert line_numbers == [1, 3, 5]
 
-    def test_grep_literal_string_matching(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_grep_literal_string_matching(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test grep with literal string matching (not regex)."""
         base_dir = "/tmp/test_sandbox_ops/grep_literal"
         sandbox.execute(f"mkdir -p {base_dir}")
@@ -755,11 +787,15 @@ class TestSandboxOperations:
         assert len(result) == 1
         assert "Hello" in result[0]["text"]
 
-    def test_grep_with_special_characters(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_grep_with_special_characters(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test grep with patterns containing special characters (treated as literals)."""
         base_dir = "/tmp/test_sandbox_ops/grep_special"
         sandbox.execute(f"mkdir -p {base_dir}")
-        sandbox.write(f"{base_dir}/special.txt", "Price: $100\nPath: /usr/bin\nPattern: [a-z]*")
+        sandbox.write(
+            f"{base_dir}/special.txt", "Price: $100\nPath: /usr/bin\nPattern: [a-z]*"
+        )
 
         # Test with dollar sign (treated as literal)
         result = sandbox.grep_raw("$100", path=base_dir)
@@ -783,7 +819,9 @@ class TestSandboxOperations:
         assert isinstance(result, list)
         assert len(result) == 0
 
-    def test_grep_across_nested_directories(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_grep_across_nested_directories(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test grep recursively searches nested directories."""
         base_dir = "/tmp/test_sandbox_ops/grep_nested"
         sandbox.execute(f"mkdir -p {base_dir}/sub1/sub2")
@@ -881,7 +919,9 @@ class TestSandboxOperations:
         assert len(result) == 1
         assert "test.py" in result[0]["path"]
 
-    def test_glob_hidden_files_explicitly(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_glob_hidden_files_explicitly(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test glob with pattern that explicitly matches hidden files."""
         base_dir = "/tmp/test_sandbox_ops/glob_hidden"
         sandbox.execute(f"mkdir -p {base_dir}")
@@ -993,7 +1033,9 @@ class TestSandboxOperations:
         assert "Modified content" in updated_content
         assert "Original" not in updated_content
 
-    def test_complex_directory_operations(self, sandbox: SandboxBackendProtocol) -> None:
+    def test_complex_directory_operations(
+        self, sandbox: SandboxBackendProtocol
+    ) -> None:
         """Test complex scenario with multiple operations."""
         base_dir = "/tmp/test_sandbox_ops/complex"
 

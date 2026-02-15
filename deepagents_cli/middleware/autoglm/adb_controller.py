@@ -17,6 +17,7 @@ This module provides comprehensive ADB control capabilities including:
 
 import base64
 import os
+import pathlib
 import subprocess
 import tempfile
 import time
@@ -26,7 +27,6 @@ from enum import Enum
 from io import BytesIO
 
 from PIL import Image
-
 
 # Constants and defaults
 DEFAULT_TAP_DELAY = 0.5
@@ -77,7 +77,11 @@ def check_adb_available() -> bool:
     """
     try:
         result = subprocess.run(
-            ["adb", "version"], capture_output=True, text=True, encoding="utf-8", timeout=5
+            ["adb", "version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=5,
         )
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -92,7 +96,11 @@ def list_devices() -> list[DeviceInfo]:
     """
     try:
         result = subprocess.run(
-            ["adb", "devices", "-l"], capture_output=True, text=True, encoding="utf-8", timeout=5
+            ["adb", "devices", "-l"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=5,
         )
 
         devices = []
@@ -162,10 +170,9 @@ def connect_device(address: str, timeout: int = 10) -> tuple[bool, str]:
 
         if "connected" in output.lower():
             return True, f"Connected to {address}"
-        elif "already connected" in output.lower():
+        if "already connected" in output.lower():
             return True, f"Already connected to {address}"
-        else:
-            return False, output.strip()
+        return False, output.strip()
 
     except subprocess.TimeoutExpired:
         return False, f"Connection timeout after {timeout}s"
@@ -187,7 +194,9 @@ def disconnect_device(address: str | None = None) -> tuple[bool, str]:
         if address:
             cmd.append(address)
 
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=5)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, encoding="utf-8", timeout=5
+        )
         output = result.stdout + result.stderr
         return True, output.strip() or "Disconnected"
 
@@ -276,7 +285,7 @@ def take_screenshot(device_id: str | None = None, timeout: int = 10) -> Screensh
             timeout=5,
         )
 
-        if pull_result.returncode != 0 or not os.path.exists(temp_path):
+        if pull_result.returncode != 0 or not pathlib.Path(temp_path).exists():
             return _create_fallback_screenshot(is_sensitive=True)
 
         # Read and analyze image
@@ -292,10 +301,13 @@ def take_screenshot(device_id: str | None = None, timeout: int = 10) -> Screensh
         base64_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
         # Cleanup
-        os.remove(temp_path)
+        pathlib.Path(temp_path).unlink()
 
         return Screenshot(
-            base64_data=base64_data, width=width, height=height, is_sensitive=is_sensitive
+            base64_data=base64_data,
+            width=width,
+            height=height,
+            is_sensitive=is_sensitive,
         )
 
     except Exception as e:
@@ -303,9 +315,10 @@ def take_screenshot(device_id: str | None = None, timeout: int = 10) -> Screensh
         return _create_fallback_screenshot(is_sensitive=False)
 
 
-def _is_black_or_nearly_black_screen(img: Image.Image, threshold: float = 30.0, verbose: bool = False) -> bool:
-    """
-    Check if an image is black or nearly black (indicating a sensitive/blocked screen).
+def _is_black_or_nearly_black_screen(
+    img: Image.Image, threshold: float = 30.0, verbose: bool = False
+) -> bool:
+    """Check if an image is black or nearly black (indicating a sensitive/blocked screen).
 
     Args:
         img: PIL Image object to check.
@@ -331,13 +344,17 @@ def _is_black_or_nearly_black_screen(img: Image.Image, threshold: float = 30.0, 
         avg_brightness = total_brightness / len(pixels)
 
         if verbose:
-            print(f"[DEBUG] Screenshot brightness: {avg_brightness:.2f} (threshold: {threshold})")
+            print(
+                f"[DEBUG] Screenshot brightness: {avg_brightness:.2f} (threshold: {threshold})"
+            )
 
         # If average brightness is very low, it's likely a black screen
         is_black = avg_brightness < threshold
 
         if verbose and is_black:
-            print(f"[DEBUG] Detected sensitive/black screen (brightness {avg_brightness:.2f} < {threshold})")
+            print(
+                f"[DEBUG] Detected sensitive/black screen (brightness {avg_brightness:.2f} < {threshold})"
+            )
 
         return is_black
 
@@ -368,7 +385,9 @@ def _create_fallback_screenshot(is_sensitive: bool) -> Screenshot:
 # Touch Interactions
 
 
-def tap(x: int, y: int, device_id: str | None = None, delay: float | None = None) -> None:
+def tap(
+    x: int, y: int, device_id: str | None = None, delay: float | None = None
+) -> None:
     """Tap at the specified coordinates.
 
     Args:
@@ -504,7 +523,9 @@ def press_back(device_id: str | None = None, delay: float | None = None) -> None
         delay = DEFAULT_BACK_DELAY
 
     adb_prefix = _get_adb_prefix(device_id)
-    subprocess.run(adb_prefix + ["shell", "input", "keyevent", "4"], capture_output=True)
+    subprocess.run(
+        adb_prefix + ["shell", "input", "keyevent", "4"], capture_output=True
+    )
     time.sleep(delay)
 
 
@@ -604,13 +625,17 @@ def type_text(text: str, device_id: str | None = None, verbose: bool = False) ->
             encoding="utf-8",
         )
         if verbose and result.returncode != 0:
-            print(f"[type_text] Warning: broadcast failed with return code {result.returncode}")
+            print(
+                f"[type_text] Warning: broadcast failed with return code {result.returncode}"
+            )
             print(f"[type_text] stderr: {result.stderr}")
     else:
         # Long text: split into chunks and send sequentially
         total_chunks = (len(text) + MAX_CHUNK_SIZE - 1) // MAX_CHUNK_SIZE
         if verbose:
-            print(f"[type_text] Sending long text ({len(text)} chars) in {total_chunks} chunks")
+            print(
+                f"[type_text] Sending long text ({len(text)} chars) in {total_chunks} chunks"
+            )
 
         failed_chunks = []
         for i in range(0, len(text), MAX_CHUNK_SIZE):
@@ -620,7 +645,9 @@ def type_text(text: str, device_id: str | None = None, verbose: bool = False) ->
 
             if verbose:
                 chunk_preview = chunk[:50] + "..." if len(chunk) > 50 else chunk
-                print(f"[type_text] Sending chunk {chunk_num}/{total_chunks} ({len(chunk)} chars): {chunk_preview}")
+                print(
+                    f"[type_text] Sending chunk {chunk_num}/{total_chunks} ({len(chunk)} chars): {chunk_preview}"
+                )
 
             # Retry mechanism for failed chunks
             success = False
@@ -648,26 +675,35 @@ def type_text(text: str, device_id: str | None = None, verbose: bool = False) ->
                     if result.returncode == 0:
                         success = True
                         if retry > 0 and verbose:
-                            print(f"[type_text] Chunk {chunk_num}/{total_chunks} succeeded on retry {retry}")
+                            print(
+                                f"[type_text] Chunk {chunk_num}/{total_chunks} succeeded on retry {retry}"
+                            )
                         break
-                    else:
-                        if verbose:
-                            print(f"[type_text] Chunk {chunk_num}/{total_chunks} failed (attempt {retry + 1}/{MAX_RETRIES})")
-                            print(f"[type_text] Return code: {result.returncode}, stderr: {result.stderr}")
+                    if verbose:
+                        print(
+                            f"[type_text] Chunk {chunk_num}/{total_chunks} failed (attempt {retry + 1}/{MAX_RETRIES})"
+                        )
+                        print(
+                            f"[type_text] Return code: {result.returncode}, stderr: {result.stderr}"
+                        )
 
-                        if retry < MAX_RETRIES - 1:
-                            time.sleep(RETRY_DELAY)
+                    if retry < MAX_RETRIES - 1:
+                        time.sleep(RETRY_DELAY)
 
                 except subprocess.TimeoutExpired:
                     if verbose:
-                        print(f"[type_text] Chunk {chunk_num}/{total_chunks} timeout (attempt {retry + 1}/{MAX_RETRIES})")
+                        print(
+                            f"[type_text] Chunk {chunk_num}/{total_chunks} timeout (attempt {retry + 1}/{MAX_RETRIES})"
+                        )
                     if retry < MAX_RETRIES - 1:
                         time.sleep(RETRY_DELAY)
 
             if not success:
                 failed_chunks.append(chunk_num)
                 if verbose:
-                    print(f"[type_text] ERROR: Chunk {chunk_num}/{total_chunks} failed after {MAX_RETRIES} attempts")
+                    print(
+                        f"[type_text] ERROR: Chunk {chunk_num}/{total_chunks} failed after {MAX_RETRIES} attempts"
+                    )
 
             # Delay between chunks to ensure proper delivery
             # Increased delay for better reliability
@@ -680,7 +716,7 @@ def type_text(text: str, device_id: str | None = None, verbose: bool = False) ->
                 print(f"[type_text] CRITICAL ERROR: {error_msg}")
             # Raise exception to notify caller
             raise RuntimeError(error_msg)
-        elif verbose:
+        if verbose:
             print(f"[type_text] Successfully sent all {total_chunks} chunks")
 
 
@@ -745,7 +781,10 @@ def restore_keyboard(ime: str, device_id: str | None = None) -> None:
     adb_prefix = _get_adb_prefix(device_id)
 
     subprocess.run(
-        adb_prefix + ["shell", "ime", "set", ime], capture_output=True, text=True, encoding="utf-8"
+        adb_prefix + ["shell", "ime", "set", ime],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
 
 
@@ -815,7 +854,10 @@ def get_current_app(device_id: str | None = None) -> str:
     adb_prefix = _get_adb_prefix(device_id)
 
     result = subprocess.run(
-        adb_prefix + ["shell", "dumpsys", "window"], capture_output=True, text=True, encoding="utf-8"
+        adb_prefix + ["shell", "dumpsys", "window"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     output = result.stdout
     if not output:
