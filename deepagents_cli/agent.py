@@ -2,13 +2,21 @@
 
 import os
 import shutil
-from datetime import datetime
+import tempfile
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from deepagents import create_deep_agent
 from deepagents.backends import CompositeBackend
 from deepagents.backends.filesystem import FilesystemBackend
 from deepagents.backends.sandbox import SandboxBackendProtocol
+from deepagents.middleware import MemoryMiddleware, SkillsMiddleware
+
+from deepagents_cli.backends import CLIShellBackend, patch_filesystem_middleware
+
+if TYPE_CHECKING:
+    from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 from langchain.agents.middleware import (
     InterruptOnConfig,
 )
@@ -16,15 +24,25 @@ from langchain.agents.middleware.types import AgentState
 from langchain.messages import ToolCall
 from langchain.tools import BaseTool
 from langchain_core.language_models import BaseChatModel
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.pregel import Pregel
 from langgraph.runtime import Runtime
 
-from deepagents_cli.agent_memory import AgentMemoryMiddleware
-from deepagents_cli.config import COLORS, config, console, get_default_coding_instructions, settings
+from deepagents_cli.config import (
+    COLORS,
+    config,
+    console,
+    get_default_coding_instructions,
+    get_glyphs,
+    settings,
+)
 from deepagents_cli.integrations.sandbox_factory import get_default_working_dir
-from deepagents_cli.shell import ShellMiddleware
-from deepagents_cli.skills import SkillsMiddleware
+from deepagents_cli.local_context import LocalContextMiddleware
+from deepagents_cli.subagents import list_subagents
+
+DEFAULT_AGENT_NAME = "agent"
+"""The default agent name used when no `-a` flag is provided."""
 
 
 def list_agents() -> None:
@@ -34,7 +52,8 @@ def list_agents() -> None:
     if not agents_dir.exists() or not any(agents_dir.iterdir()):
         console.print("[yellow]No agents found.[/yellow]")
         console.print(
-            "[dim]Agents will be created in ~/.deepagents/ when you first use them.[/dim]",
+            "[dim]Agents will be created in ~/.deepagents/ "
+            "when you first use them.[/dim]",
             style=COLORS["dim"],
         )
         return
@@ -44,14 +63,22 @@ def list_agents() -> None:
     for agent_path in sorted(agents_dir.iterdir()):
         if agent_path.is_dir():
             agent_name = agent_path.name
-            agent_md = agent_path / "agent.md"
+            agent_md = agent_path / "AGENTS.md"
+            is_default = agent_name == DEFAULT_AGENT_NAME
+            default_label = " [dim](default)[/dim]" if is_default else ""
 
+            bullet = get_glyphs().bullet
             if agent_md.exists():
-                console.print(f"  • [bold]{agent_name}[/bold]", style=COLORS["primary"])
+                console.print(
+                    f"  {bullet} [bold]{agent_name}[/bold]{default_label}",
+                    style=COLORS["primary"],
+                )
                 console.print(f"    {agent_path}", style=COLORS["dim"])
             else:
                 console.print(
-                    f"  • [bold]{agent_name}[/bold] [dim](incomplete)[/dim]", style=COLORS["tool"]
+                    f"  {bullet} [bold]{agent_name}[/bold]{default_label}"
+                    " [dim](incomplete)[/dim]",
+                    style=COLORS["tool"],
                 )
                 console.print(f"    {agent_path}", style=COLORS["dim"])
 
@@ -65,12 +92,12 @@ def reset_agent(agent_name: str, source_agent: str | None = None) -> None:
 
     if source_agent:
         source_dir = agents_dir / source_agent
-        source_md = source_dir / "agent.md"
+        source_md = source_dir / "AGENTS.md"
 
         if not source_md.exists():
             console.print(
                 f"[bold red]Error:[/bold red] Source agent '{source_agent}' not found "
-                "or has no agent.md"
+                "or has no AGENTS.md"
             )
             return
 
@@ -82,55 +109,63 @@ def reset_agent(agent_name: str, source_agent: str | None = None) -> None:
 
     if agent_dir.exists():
         shutil.rmtree(agent_dir)
-        console.print(f"Removed existing agent directory: {agent_dir}", style=COLORS["tool"])
+        console.print(
+            f"Removed existing agent directory: {agent_dir}", style=COLORS["tool"]
+        )
 
     agent_dir.mkdir(parents=True, exist_ok=True)
-    agent_md = agent_dir / "agent.md"
+    agent_md = agent_dir / "AGENTS.md"
     agent_md.write_text(source_content)
 
-    console.print(f"✓ Agent '{agent_name}' reset to {action_desc}", style=COLORS["primary"])
+    console.print(
+        f"{get_glyphs().checkmark} Agent '{agent_name}' reset to {action_desc}",
+        style=COLORS["primary"],
+    )
     console.print(f"Location: {agent_dir}\n", style=COLORS["dim"])
 
 
 def get_system_prompt(assistant_id: str, sandbox_type: str | None = None) -> str:
     """Get the base system prompt for the agent.
 
+    This includes:
+    1. The immutable base instructions from default_agent_prompt.md
+    2. Environment-specific context (working directory, model info, etc.)
+
     Args:
         assistant_id: The agent identifier for path references
-        sandbox_type: Type of sandbox provider ("modal", "runloop", "daytona").
-                     If None, agent is operating in local mode.
+        sandbox_type: Type of sandbox provider
+            ("daytona", "langsmith", "modal", "runloop").
+
+            If None, agent is operating in local mode.
 
     Returns:
-        The system prompt string (without agent.md content)
+        The system prompt string (base instructions + environment context)
     """
+    # Always load base instructions fresh from package
+    base_instructions = get_default_coding_instructions()
     agent_dir_path = f"~/.deepagents/{assistant_id}"
 
-    # Get current time information
-    now = datetime.now()
-    current_time = now.strftime("%Y-%m-%d %H:%M:%S")
-    current_date = now.strftime("%Y-%m-%d, %A")
-    current_year = now.year
+    # Build model identity section
+    model_identity_section = ""
+    if settings.model_name:
+        model_identity_section = f"""### Model Identity
+
+You are running as model `{settings.model_name}`"""
+        if settings.model_provider:
+            model_identity_section += f" (provider: {settings.model_provider})"
+        model_identity_section += ".\n"
+        if settings.model_context_limit:
+            model_identity_section += (
+                f"Your context window is {settings.model_context_limit:,} tokens.\n"
+            )
+        model_identity_section += "\n"
 
     if sandbox_type:
         # Get provider-specific working directory
 
         working_dir = get_default_working_dir(sandbox_type)
 
-        working_dir_section = f"""<env>
-Working directory: {working_dir}
-Current time: {current_time}
-Current date: {current_date}
-Current year: {current_year}
-</env>
-
-**IMPORTANT - Current Date Awareness:**
-Today is {current_date} ({current_year}). When searching for information, making references to "this year", "recent events", or time-sensitive data:
-- Use {current_year} as the current year in your searches
-- "This year" or "今年" means {current_year}
-- Recent events should reference {current_year}, not previous years
-- Example: If asked about "this year's events", search for "{current_year} events", not "{current_year - 1} events"
-
-### Current Working Directory
+        working_dir_section = f"""### Current Working Directory
 
 You are operating in a **remote Linux sandbox** at `{working_dir}`.
 
@@ -143,21 +178,7 @@ All code execution and file operations happen in this sandbox environment.
 """
     else:
         cwd = Path.cwd()
-        working_dir_section = f"""<env>
-Working directory: {cwd}
-Current time: {current_time}
-Current date: {current_date}
-Current year: {current_year}
-</env>
-
-**IMPORTANT - Current Date Awareness:**
-Today is {current_date} ({current_year}). When searching for information, making references to "this year", "recent events", or time-sensitive data:
-- Use {current_year} as the current year in your searches
-- "This year" or "今年" means {current_year}
-- Recent events should reference {current_year}, not previous years
-- Example: If asked about "this year's events", search for "{current_year} events", not "{current_year - 1} events"
-
-### Current Working Directory
+        working_dir_section = f"""### Current Working Directory
 
 The filesystem backend is currently operating in: `{cwd}`
 
@@ -165,14 +186,17 @@ The filesystem backend is currently operating in: `{cwd}`
 
 **IMPORTANT - Path Handling:**
 - All file paths must be absolute paths (e.g., `{cwd}/file.txt`)
-- Use the working directory from <env> to construct absolute paths
+- Use the working directory to construct absolute paths
 - Example: To create a file in your working directory, use `{cwd}/research_project/file.md`
 - Never use relative paths - always construct full absolute paths
 
-"""
+"""  # noqa: E501
 
     return (
-        working_dir_section
+        base_instructions
+        + "\n\n---\n\n"
+        + model_identity_section
+        + working_dir_section
         + f"""### Skills Directory
 
 Your skills are stored at: `{agent_dir_path}/skills/`
@@ -214,14 +238,18 @@ When using the write_todos tool:
    - If they want changes, adjust the plan accordingly
 6. Update todo status promptly as you complete each item
 
-The todo list is a planning tool - use it judiciously to avoid overwhelming the user with excessive task tracking."""
+The todo list is a planning tool - use it judiciously to avoid overwhelming the user with excessive task tracking."""  # noqa: E501
     )
 
 
 def _format_write_file_description(
-    tool_call: ToolCall, _state: AgentState, _runtime: Runtime
+    tool_call: ToolCall, _state: AgentState[Any], _runtime: Runtime[Any]
 ) -> str:
-    """Format write_file tool call for approval prompt."""
+    """Format write_file tool call for approval prompt.
+
+    Returns:
+        Formatted description string for the write_file tool call.
+    """
     args = tool_call["args"]
     file_path = args.get("file_path", "unknown")
     content = args.get("content", "")
@@ -233,46 +261,67 @@ def _format_write_file_description(
 
 
 def _format_edit_file_description(
-    tool_call: ToolCall, _state: AgentState, _runtime: Runtime
+    tool_call: ToolCall, _state: AgentState[Any], _runtime: Runtime[Any]
 ) -> str:
-    """Format edit_file tool call for approval prompt."""
+    """Format edit_file tool call for approval prompt.
+
+    Returns:
+        Formatted description string for the edit_file tool call.
+    """
     args = tool_call["args"]
     file_path = args.get("file_path", "unknown")
     replace_all = bool(args.get("replace_all", False))
 
-    return (
-        f"File: {file_path}\n"
-        f"Action: Replace text ({'all occurrences' if replace_all else 'single occurrence'})"
-    )
+    scope = "all occurrences" if replace_all else "single occurrence"
+    return f"File: {file_path}\nAction: Replace text ({scope})"
 
 
 def _format_web_search_description(
-    tool_call: ToolCall, _state: AgentState, _runtime: Runtime
+    tool_call: ToolCall, _state: AgentState[Any], _runtime: Runtime[Any]
 ) -> str:
-    """Format web_search tool call for approval prompt."""
+    """Format web_search tool call for approval prompt.
+
+    Returns:
+        Formatted description string for the web_search tool call.
+    """
     args = tool_call["args"]
     query = args.get("query", "unknown")
     max_results = args.get("max_results", 5)
 
-    return f"Query: {query}\nMax results: {max_results}\n\n⚠️  This will use Tavily API credits"
+    return (
+        f"Query: {query}\nMax results: {max_results}\n\n"
+        f"{get_glyphs().warning}  This will use Tavily API credits"
+    )
 
 
 def _format_fetch_url_description(
-    tool_call: ToolCall, _state: AgentState, _runtime: Runtime
+    tool_call: ToolCall, _state: AgentState[Any], _runtime: Runtime[Any]
 ) -> str:
-    """Format fetch_url tool call for approval prompt."""
+    """Format fetch_url tool call for approval prompt.
+
+    Returns:
+        Formatted description string for the fetch_url tool call.
+    """
     args = tool_call["args"]
     url = args.get("url", "unknown")
     timeout = args.get("timeout", 30)
 
-    return f"URL: {url}\nTimeout: {timeout}s\n\n⚠️  Will fetch and convert web content to markdown"
+    return (
+        f"URL: {url}\nTimeout: {timeout}s\n\n"
+        f"{get_glyphs().warning}  Will fetch and convert web content to markdown"
+    )
 
 
-def _format_task_description(tool_call: ToolCall, _state: AgentState, _runtime: Runtime) -> str:
+def _format_task_description(
+    tool_call: ToolCall, _state: AgentState[Any], _runtime: Runtime[Any]
+) -> str:
     """Format task (subagent) tool call for approval prompt.
 
     The task tool signature is: task(description: str, subagent_type: str)
     The description contains all instructions that will be sent to the subagent.
+
+    Returns:
+        Formatted description string for the task tool call.
     """
     args = tool_call["args"]
     description = args.get("description", "unknown")
@@ -283,90 +332,80 @@ def _format_task_description(tool_call: ToolCall, _state: AgentState, _runtime: 
     if len(description) > 500:
         description_preview = description[:500] + "..."
 
+    glyphs = get_glyphs()
+    separator = glyphs.box_horizontal * 40
+    warning_msg = "Subagent will have access to file operations and shell commands"
     return (
         f"Subagent Type: {subagent_type}\n\n"
         f"Task Instructions:\n"
-        f"{'─' * 40}\n"
+        f"{separator}\n"
         f"{description_preview}\n"
-        f"{'─' * 40}\n\n"
-        f"⚠️  Subagent will have access to file operations and shell commands"
+        f"{separator}\n\n"
+        f"{glyphs.warning}  {warning_msg}"
     )
 
 
-def _format_shell_description(tool_call: ToolCall, _state: AgentState, _runtime: Runtime) -> str:
-    """Format shell tool call for approval prompt."""
+def _format_execute_description(
+    tool_call: ToolCall, _state: AgentState[Any], _runtime: Runtime[Any]
+) -> str:
+    """Format execute tool call for approval prompt.
+
+    Returns:
+        Formatted description string for the execute tool call.
+    """
     args = tool_call["args"]
     command = args.get("command", "N/A")
-    return f"Shell Command: {command}\nWorking Directory: {Path.cwd()}"
-
-
-def _format_execute_description(tool_call: ToolCall, _state: AgentState, _runtime: Runtime) -> str:
-    """Format execute tool call for approval prompt."""
-    args = tool_call["args"]
-    command = args.get("command", "N/A")
-    return f"Execute Command: {command}\nLocation: Remote Sandbox"
-
-
-def _format_phone_task_description(tool_call: ToolCall, _state: AgentState, _runtime: Runtime) -> str:
-    """Format phone_task tool call for approval prompt."""
-    args = tool_call["args"]
-    task = args.get("task", "N/A")
-    # Truncate task if too long
-    task_preview = task if len(task) <= 200 else task[:200] + "..."
-    return f"Phone Task: {task_preview}\n\n⚠️  Will control the connected mobile device"
+    return f"Execute Command: {command}\nWorking Directory: {Path.cwd()}"
 
 
 def _add_interrupt_on() -> dict[str, InterruptOnConfig]:
-    """Configure human-in-the-loop interrupt_on settings for destructive tools."""
-    shell_interrupt_config: InterruptOnConfig = {
-        "allowed_decisions": ["approve", "reject"],
-        "description": _format_shell_description,
-    }
+    """Configure human-in-the-loop interrupt settings for all gated tools.
 
+    Every tool that can have side effects or access external resources
+    (shell execution, file writes/edits, web search, URL fetch, task
+    delegation) is gated behind an approval prompt unless auto-approve
+    is enabled.
+
+    Returns:
+        Dictionary mapping tool names to their interrupt configuration.
+    """
     execute_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_execute_description,
+        "description": _format_execute_description,  # type: ignore[typeddict-item]
     }
 
     write_file_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_write_file_description,
+        "description": _format_write_file_description,  # type: ignore[typeddict-item]
     }
 
     edit_file_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_edit_file_description,
+        "description": _format_edit_file_description,  # type: ignore[typeddict-item]
     }
 
     web_search_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_web_search_description,
+        "description": _format_web_search_description,  # type: ignore[typeddict-item]
     }
 
     fetch_url_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_fetch_url_description,
+        "description": _format_fetch_url_description,  # type: ignore[typeddict-item]
     }
 
     task_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_task_description,
-    }
-
-    phone_task_interrupt_config: InterruptOnConfig = {
-        "allowed_decisions": ["approve", "reject"],
-        "description": _format_phone_task_description,
+        "description": _format_task_description,  # type: ignore[typeddict-item]
     }
 
     return {
-        "shell": shell_interrupt_config,
         "execute": execute_interrupt_config,
         "write_file": write_file_interrupt_config,
         "edit_file": edit_file_interrupt_config,
         "web_search": web_search_interrupt_config,
         "fetch_url": fetch_url_interrupt_config,
         "task": task_interrupt_config,
-        "phone_task": phone_task_interrupt_config,
     }
 
 
@@ -374,7 +413,7 @@ def create_cli_agent(
     model: str | BaseChatModel,
     assistant_id: str,
     *,
-    tools: list[BaseTool] | None = None,
+    tools: Sequence[BaseTool | Callable | dict[str, Any]] | None = None,
     sandbox: SandboxBackendProtocol | None = None,
     sandbox_type: str | None = None,
     system_prompt: str | None = None,
@@ -382,43 +421,59 @@ def create_cli_agent(
     enable_memory: bool = True,
     enable_skills: bool = True,
     enable_shell: bool = True,
+    checkpointer: BaseCheckpointSaver | None = None,
 ) -> tuple[Pregel, CompositeBackend]:
     """Create a CLI-configured agent with flexible options.
 
-    This is the main entry point for creating a deepagents CLI agent, usable both
-    internally and from external code (e.g., benchmarking frameworks, Harbor).
+    This is the main entry point for creating a deepagents CLI agent, usable
+    both internally and from external code (e.g., benchmarking frameworks).
 
     Args:
-        model: LLM model to use (e.g., "anthropic:claude-sonnet-4-5-20250929")
+        model: LLM model to use (e.g., `'anthropic:claude-sonnet-4-5-20250929'`)
         assistant_id: Agent identifier for memory/state storage
-        tools: Additional tools to provide to agent (default: empty list)
-        sandbox: Optional sandbox backend for remote execution (e.g., ModalBackend).
-                 If None, uses local filesystem + shell.
-        sandbox_type: Type of sandbox provider ("modal", "runloop", "daytona").
-                     Used for system prompt generation.
-        system_prompt: Override the default system prompt. If None, generates one
-                      based on sandbox_type and assistant_id.
-        auto_approve: If True, automatically approves all tool calls without human
-                     confirmation. Useful for automated workflows.
-        enable_memory: Enable AgentMemoryMiddleware for persistent memory
-        enable_skills: Enable SkillsMiddleware for custom agent skills
-        enable_shell: Enable ShellMiddleware for local shell execution (only in local mode)
+        tools: Additional tools to provide to agent
+        sandbox: Optional sandbox backend for remote execution
+            (e.g., `ModalBackend`).
+
+            If `None`, uses local filesystem + shell.
+        sandbox_type: Type of sandbox provider
+            (`'daytona'`, `'langsmith'`, `'modal'`, `'runloop'`).
+            Used for system prompt generation.
+        system_prompt: Override the default system prompt.
+
+            If `None`, generates one based on `sandbox_type` and `assistant_id`.
+        auto_approve: If `True`, no tools trigger human-in-the-loop
+            interrupts — all calls (shell execution, file writes/edits,
+            web search, URL fetch) run automatically.
+
+            If `False`, tools pause for user confirmation via the approval menu.
+            See `_add_interrupt_on` for the full list of gated tools.
+        enable_memory: Enable `MemoryMiddleware` for persistent memory
+        enable_skills: Enable `SkillsMiddleware` for custom agent skills
+        enable_shell: Enable shell execution via `CLIShellBackend`
+            (only in local mode). When enabled, the `execute` tool is available.
+        checkpointer: Optional checkpointer for session persistence.
+
+            If `None`, uses `InMemorySaver` (no persistence across
+            CLI invocations).
 
     Returns:
-        2-tuple of (agent_graph, composite_backend)
-        - agent_graph: Configured LangGraph Pregel instance ready for execution
-        - composite_backend: CompositeBackend for file operations
+        2-tuple of `(agent_graph, backend)`
+
+            - `agent_graph`: Configured LangGraph Pregel instance ready
+                for execution
+            - `composite_backend`: `CompositeBackend` for file operations
     """
-    if tools is None:
-        tools = []
+    tools = tools or []
 
     # Setup agent directory for persistent memory (if enabled)
     if enable_memory or enable_skills:
         agent_dir = settings.ensure_agent_dir(assistant_id)
-        agent_md = agent_dir / "agent.md"
+        agent_md = agent_dir / "AGENTS.md"
         if not agent_md.exists():
-            source_content = get_default_coding_instructions()
-            agent_md.write_text(source_content)
+            # Create empty file for user customizations
+            # Base instructions are loaded fresh from get_system_prompt()
+            agent_md.touch()
 
     # Skills directories (if enabled)
     skills_dir = None
@@ -427,48 +482,97 @@ def create_cli_agent(
         skills_dir = settings.ensure_user_skills_dir(assistant_id)
         project_skills_dir = settings.get_project_skills_dir()
 
+    # Load custom subagents from filesystem
+    custom_subagents: list[SubAgent | CompiledSubAgent] = []
+    user_agents_dir = settings.get_user_agents_dir(assistant_id)
+    project_agents_dir = settings.get_project_agents_dir()
+
+    for subagent_meta in list_subagents(
+        user_agents_dir=user_agents_dir,
+        project_agents_dir=project_agents_dir,
+    ):
+        subagent: SubAgent = {
+            "name": subagent_meta["name"],
+            "description": subagent_meta["description"],
+            "system_prompt": subagent_meta["system_prompt"],
+        }
+        if subagent_meta["model"]:
+            subagent["model"] = subagent_meta["model"]
+        custom_subagents.append(subagent)
+
     # Build middleware stack based on enabled features
     agent_middleware = []
+
+    # Add memory middleware
+    if enable_memory:
+        memory_sources = [str(settings.get_user_agent_md_path(assistant_id))]
+        project_agent_md = settings.get_project_agent_md_path()
+        if project_agent_md:
+            memory_sources.append(str(project_agent_md))
+
+        agent_middleware.append(
+            MemoryMiddleware(
+                backend=FilesystemBackend(),
+                sources=memory_sources,
+            )
+        )
+
+    # Add skills middleware
+    if enable_skills:
+        # Built-in first (lowest precedence), then user, then project (highest)
+        sources = [str(settings.get_built_in_skills_dir())]
+        sources.append(str(skills_dir))
+        if project_skills_dir:
+            sources.append(str(project_skills_dir))
+
+        agent_middleware.append(
+            SkillsMiddleware(
+                backend=FilesystemBackend(),
+                sources=sources,
+            )
+        )
 
     # CONDITIONAL SETUP: Local vs Remote Sandbox
     if sandbox is None:
         # ========== LOCAL MODE ==========
-        composite_backend = CompositeBackend(
-            default=FilesystemBackend(),  # Current working directory
-            routes={},  # No virtualization - use real paths
-        )
+        if enable_shell:
+            # Create environment for shell commands
+            # Restore user's original LANGSMITH_PROJECT so their code traces separately
+            shell_env = os.environ.copy()
+            if settings.user_langchain_project:
+                shell_env["LANGSMITH_PROJECT"] = settings.user_langchain_project
 
-        # Add memory middleware
-        if enable_memory:
-            agent_middleware.append(
-                AgentMemoryMiddleware(settings=settings, assistant_id=assistant_id)
+            # Use CLIShellBackend for filesystem + shell execution.
+            # Provides `execute` tool via FilesystemMiddleware with per-command
+            # timeout support.
+            backend = CLIShellBackend(
+                root_dir=Path.cwd(),
+                inherit_env=True,
+                env=shell_env,
             )
+        else:
+            # No shell access - use plain FilesystemBackend
+            backend = FilesystemBackend()
 
-        # Add skills middleware
-        if enable_skills:
-            agent_middleware.append(
-                SkillsMiddleware(
-                    skills_dir=skills_dir,
-                    assistant_id=assistant_id,
-                    project_skills_dir=project_skills_dir,
-                )
-            )
+        # Local context middleware (git info, directory tree, etc.)
+        agent_middleware.append(LocalContextMiddleware())
 
-        # Add AutoGLM middleware (only in local mode)
         if settings.has_autoglm:
-            from langchain_openai import ChatOpenAI
+            import importlib
+            from deepagents_cli.middleware.autoglm_middleware import (
+                AutoGLMConfig,
+                AutoGLMMiddleware,
+            )
 
-            from deepagents_cli.middleware.autoglm_middleware import AutoGLMConfig, AutoGLMMiddleware
-
-            # Create vision model
-            vision_model = ChatOpenAI(
+            chat_openai_module = importlib.import_module("langchain_openai")
+            chat_openai_class = getattr(chat_openai_module, "ChatOpenAI")
+            vision_model = chat_openai_class(
                 base_url=settings.autoglm_vision_model_url,
                 model=settings.autoglm_vision_model_name,
                 api_key=settings.autoglm_vision_api_key,
                 temperature=0.0,
             )
 
-            # Create AutoGLM config
             autoglm_config = AutoGLMConfig(
                 vision_model=vision_model,
                 platform=settings.autoglm_platform,
@@ -481,56 +585,63 @@ def create_cli_agent(
                 verbose=settings.autoglm_verbose,
             )
 
-            # Add middleware
             agent_middleware.append(AutoGLMMiddleware(autoglm_config))
-
-        # Add shell middleware (only in local mode)
-        if enable_shell:
-            agent_middleware.append(
-                ShellMiddleware(
-                    workspace_root=str(Path.cwd()),
-                    env=os.environ,
-                )
-            )
     else:
         # ========== REMOTE SANDBOX MODE ==========
-        composite_backend = CompositeBackend(
-            default=sandbox,  # Remote sandbox (ModalBackend, etc.)
-            routes={},  # No virtualization
-        )
-
-        # Add memory middleware
-        if enable_memory:
-            agent_middleware.append(
-                AgentMemoryMiddleware(settings=settings, assistant_id=assistant_id)
-            )
-
-        # Add skills middleware
-        if enable_skills:
-            agent_middleware.append(
-                SkillsMiddleware(
-                    skills_dir=skills_dir,
-                    assistant_id=assistant_id,
-                    project_skills_dir=project_skills_dir,
-                )
-            )
-
+        backend = sandbox  # Remote sandbox (ModalBackend, etc.)
         # Note: Shell middleware not used in sandbox mode
         # File operations and execute tool are provided by the sandbox backend
 
     # Get or use custom system prompt
     if system_prompt is None:
-        system_prompt = get_system_prompt(assistant_id=assistant_id, sandbox_type=sandbox_type)
+        system_prompt = get_system_prompt(
+            assistant_id=assistant_id, sandbox_type=sandbox_type
+        )
 
     # Configure interrupt_on based on auto_approve setting
+    interrupt_on: dict[str, bool | InterruptOnConfig] | None = None
     if auto_approve:
         # No interrupts - all tools run automatically
         interrupt_on = {}
     else:
         # Full HITL for destructive operations
-        interrupt_on = _add_interrupt_on()
+        interrupt_on = _add_interrupt_on()  # type: ignore[assignment]
+
+    # Set up composite backend with routing
+    # For local FilesystemBackend, route large tool results to /tmp to avoid polluting
+    # the working directory. For sandbox backends, no special routing is needed.
+    if sandbox is None:
+        # Local mode: Route large results to a unique temp directory
+        large_results_backend = FilesystemBackend(
+            root_dir=tempfile.mkdtemp(prefix="deepagents_large_results_"),
+            virtual_mode=True,
+        )
+        conversation_history_backend = FilesystemBackend(
+            root_dir=tempfile.mkdtemp(prefix="deepagents_conversation_history_"),
+            virtual_mode=True,
+        )
+        composite_backend = CompositeBackend(
+            default=backend,
+            routes={
+                "/large_tool_results/": large_results_backend,
+                "/conversation_history/": conversation_history_backend,
+            },
+        )
+    else:
+        # Sandbox mode: No special routing needed
+        composite_backend = CompositeBackend(
+            default=backend,
+            routes={},
+        )
 
     # Create the agent
+    # Use provided checkpointer or fallback to InMemorySaver
+    if sandbox is None and enable_shell:
+        # Patch FilesystemMiddleware so the SDK constructs our subclass with
+        # per-command timeout support on the execute tool. Only needed in local
+        # shell mode -- remote sandbox backends do not accept the timeout kwarg.
+        patch_filesystem_middleware()
+    final_checkpointer = checkpointer if checkpointer is not None else InMemorySaver()
     agent = create_deep_agent(
         model=model,
         system_prompt=system_prompt,
@@ -538,6 +649,7 @@ def create_cli_agent(
         backend=composite_backend,
         middleware=agent_middleware,
         interrupt_on=interrupt_on,
-        checkpointer=InMemorySaver(),
+        checkpointer=final_checkpointer,
+        subagents=custom_subagents or None,
     ).with_config(config)
     return agent, composite_backend

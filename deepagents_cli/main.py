@@ -1,64 +1,85 @@
 """Main entry point and CLI loop for deepagents."""
 
+# ruff: noqa: E402
+# Imports placed after warning filters to suppress deprecation warnings
+
+# Suppress deprecation warnings from langchain_core (e.g., Pydantic V1 on Python 3.14+)
+import warnings
+
+warnings.filterwarnings("ignore", module="langchain_core._api.deprecation")
+
 import argparse
 import asyncio
-import atexit
+import contextlib
+import functools
+import importlib.util
 import os
 import sys
+import traceback
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
-from deepagents.backends.protocol import SandboxBackendProtocol
+# Suppress Pydantic v1 compatibility warnings from langchain on Python 3.14+
+warnings.filterwarnings("ignore", message=".*Pydantic V1.*", category=UserWarning)
 
-from deepagents_cli.agent import create_cli_agent, list_agents, reset_agent
-from deepagents_cli.commands import execute_bash_command, handle_command
+from rich.text import Text
+
+from deepagents_cli._version import __version__
+
+# Now safe to import agent (which imports LangChain modules)
+from deepagents_cli.agent import (
+    DEFAULT_AGENT_NAME,
+    create_cli_agent,
+    list_agents,
+    reset_agent,
+)
+
+# CRITICAL: Import config FIRST to set LANGSMITH_PROJECT before LangChain loads
 from deepagents_cli.config import (
-    COLORS,
-    DEEP_AGENTS_ASCII,
-    SessionState,
     console,
     create_model,
     settings,
 )
-from deepagents_cli.execution import execute_task
-from deepagents_cli.input import ImageTracker, create_prompt_session
-from deepagents_cli.integrations.sandbox_factory import (
-    create_sandbox,
-    get_default_working_dir,
+from deepagents_cli.integrations.sandbox_factory import create_sandbox
+from deepagents_cli.sessions import (
+    delete_thread_command,
+    find_similar_threads,
+    generate_thread_id,
+    get_checkpointer,
+    get_most_recent,
+    get_thread_agent,
+    list_threads_command,
+    thread_exists,
 )
 from deepagents_cli.skills import execute_skills_command, setup_skills_parser
-# ForceExitException removed - now using only KeyboardInterrupt for interruptions
 from deepagents_cli.tools import fetch_url, http_request, web_search
-from deepagents_cli.ui import TokenTracker, print_banner, show_help
+from deepagents_cli.ui import (
+    build_help_parent,
+    show_help,
+    show_list_help,
+    show_reset_help,
+    show_threads_delete_help,
+    show_threads_help,
+    show_threads_list_help,
+)
 
 
 def check_cli_dependencies() -> None:
     """Check if CLI optional dependencies are installed."""
     missing = []
 
-    try:
-        import rich
-    except ImportError:
-        missing.append("rich")
-
-    try:
-        import requests
-    except ImportError:
+    if importlib.util.find_spec("requests") is None:
         missing.append("requests")
 
-    try:
-        import dotenv
-    except ImportError:
+    if importlib.util.find_spec("dotenv") is None:
         missing.append("python-dotenv")
 
-    try:
-        import tavily
-    except ImportError:
+    if importlib.util.find_spec("tavily") is None:
         missing.append("tavily-python")
 
-    try:
-        import prompt_toolkit
-    except ImportError:
-        missing.append("prompt-toolkit")
+    if importlib.util.find_spec("textual") is None:
+        missing.append("textual")
 
     if missing:
         print("\n❌ Missing required CLI dependencies!")
@@ -72,343 +93,349 @@ def check_cli_dependencies() -> None:
         sys.exit(1)
 
 
-def parse_args():
-    """Parse command line arguments."""
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments.
+
+    Returns:
+        Parsed arguments namespace.
+    """
+
+    # Factory that builds an argparse Action whose __call__ invokes the
+    # supplied *help_fn* instead of argparse's default help text.  Each
+    # subcommand can pass its own Rich-formatted help screen so that
+    # `deepagents <subcommand> -h` shows context-specific help.
+    def _make_help_action(
+        help_fn: Callable[[], None],
+    ) -> type[argparse.Action]:
+        """Create an argparse Action that displays *help_fn* and exits.
+
+        argparse requires a *class* (not a callable) for custom actions.
+        This factory uses a closure: the returned `_ShowHelp` class captures
+        *help_fn* from the enclosing scope so that each subcommand can wire `-h`
+        to its own Rich help screen.
+
+        Args:
+            help_fn: Callable that prints help text to the console.
+
+        Returns:
+            An argparse Action class wired to the given help function.
+        """
+
+        class _ShowHelp(argparse.Action):
+            def __init__(
+                self,
+                option_strings: list[str],
+                dest: str = argparse.SUPPRESS,
+                default: str = argparse.SUPPRESS,
+                **kwargs: Any,
+            ) -> None:
+                super().__init__(
+                    option_strings=option_strings,
+                    dest=dest,
+                    default=default,
+                    nargs=0,
+                    **kwargs,
+                )
+
+            def __call__(
+                self,
+                parser: argparse.ArgumentParser,
+                namespace: argparse.Namespace,  # noqa: ARG002
+                values: str | Sequence[Any] | None,  # noqa: ARG002
+                option_string: str | None = None,  # noqa: ARG002
+            ) -> None:
+                with contextlib.suppress(BrokenPipeError):
+                    help_fn()
+                parser.exit()
+
+        return _ShowHelp
+
+    help_parent = functools.partial(
+        build_help_parent, make_help_action=_make_help_action
+    )
+
     parser = argparse.ArgumentParser(
-        description="DeepAgents - AI Coding Assistant",
+        description=("Deep Agents - AI Coding Assistant"),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         add_help=False,
     )
-
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
-    # List command
-    subparsers.add_parser("list", help="List all available agents")
+    subparsers.add_parser(
+        "help",
+        help="Show help information",
+        add_help=False,
+        parents=help_parent(show_help),
+    )
 
-    # Help command
-    subparsers.add_parser("help", help="Show help information")
+    subparsers.add_parser(
+        "list",
+        help="List all available agents",
+        add_help=False,
+        parents=help_parent(show_list_help),
+    )
 
-    # Reset command
-    reset_parser = subparsers.add_parser("reset", help="Reset an agent")
+    reset_parser = subparsers.add_parser(
+        "reset",
+        help="Reset an agent",
+        add_help=False,
+        parents=help_parent(show_reset_help),
+    )
     reset_parser.add_argument("--agent", required=True, help="Name of agent to reset")
     reset_parser.add_argument(
         "--target", dest="source_agent", help="Copy prompt from another agent"
     )
 
-    # Skills command - setup delegated to skills module
-    setup_skills_parser(subparsers)
+    setup_skills_parser(subparsers, make_help_action=_make_help_action)
 
-    # Default interactive mode
-    parser.add_argument(
-        "--agent",
-        default="agent",
-        help="Agent identifier for separate memory stores (default: agent).",
+    threads_parser = subparsers.add_parser(
+        "threads",
+        help="Manage conversation threads",
+        add_help=False,
+        parents=help_parent(show_threads_help),
     )
+    threads_sub = threads_parser.add_subparsers(dest="threads_command")
+
+    threads_list = threads_sub.add_parser(
+        "list",
+        aliases=["ls"],
+        help="List threads",
+        add_help=False,
+        parents=help_parent(show_threads_list_help),
+    )
+    threads_list.add_argument(
+        "--agent", default=None, help="Filter by agent name (default: show all)"
+    )
+    threads_list.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Max number of threads to display (default: 20)",
+    )
+    threads_delete = threads_sub.add_parser(
+        "delete",
+        help="Delete a thread",
+        add_help=False,
+        parents=help_parent(show_threads_delete_help),
+    )
+    threads_delete.add_argument("thread_id", help="Thread ID to delete")
+
+    # Default interactive mode — argument order here determines the
+    # usage line printed by argparse; keep in sync with ui.show_help().
+    parser.add_argument(
+        "-r",
+        "--resume",
+        dest="resume_thread",
+        nargs="?",
+        const="__MOST_RECENT__",
+        default=None,
+        metavar="ID",
+        help="Resume thread: -r for most recent, -r <ID> for specific thread",
+    )
+
+    parser.add_argument(
+        "-a",
+        "--agent",
+        default=DEFAULT_AGENT_NAME,
+        metavar="NAME",
+        help="Agent to use (e.g., coder, researcher).",
+    )
+
+    parser.add_argument(
+        "-M",
+        "--model",
+        metavar="MODEL",
+        help="Model to use (e.g., claude-sonnet-4-5-20250929, gpt-5.2). "
+        "Provider is auto-detected from model name.",
+    )
+
+    parser.add_argument(
+        "-m",
+        "--message",
+        dest="initial_prompt",
+        metavar="TEXT",
+        help="Initial prompt to auto-submit when session starts",
+    )
+
+    parser.add_argument(
+        "-n",
+        "--non-interactive",
+        dest="non_interactive_message",
+        metavar="TEXT",
+        help="Run a single task non-interactively and exit "
+        "(shell disabled unless --shell-allow-list is set)",
+    )
+
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Clean output for piping — only the agent's response "
+        "goes to stdout. Requires -n.",
+    )
+
     parser.add_argument(
         "--auto-approve",
         action="store_true",
-        help="Auto-approve tool usage without prompting (disables human-in-the-loop)",
+        help=(
+            "Auto-approve all tool calls without prompting "
+            "(disables human-in-the-loop). Affected tools: shell "
+            "execution, file writes/edits, web search, and URL fetch. "
+            "Use with caution — the agent can execute arbitrary commands."
+        ),
     )
+
     parser.add_argument(
         "--sandbox",
-        choices=["none", "modal", "daytona", "runloop"],
+        choices=["none", "modal", "daytona", "runloop", "langsmith"],
         default="none",
+        metavar="TYPE",
         help="Remote sandbox for code execution (default: none - local only)",
     )
+
     parser.add_argument(
         "--sandbox-id",
+        metavar="ID",
         help="Existing sandbox ID to reuse (skips creation and cleanup)",
     )
+
     parser.add_argument(
         "--sandbox-setup",
+        metavar="PATH",
         help="Path to setup script to run in sandbox after creation",
     )
     parser.add_argument(
-        "--no-splash",
-        action="store_true",
-        help="Disable the startup splash screen",
+        "--shell-allow-list",
+        metavar="LIST",
+        help="Comma-separated list of shell commands to auto-approve, "
+        "or 'recommended' for safe defaults. "
+        "Applies to both -n and interactive modes.",
     )
 
-    return parser.parse_args()
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"deepagents-cli {__version__}",
+    )
+    parser.add_argument(
+        "-h",
+        "--help",
+        action=_make_help_action(show_help),
+    )
+
+    args = parser.parse_args()
+
+    if args.quiet and not args.non_interactive_message:
+        parser.error("--quiet requires --non-interactive (-n)")
+
+    return args
 
 
-async def simple_cli(
-    agent,
-    assistant_id: str | None,
-    session_state,
-    baseline_tokens: int = 0,
-    backend=None,
-    sandbox_type: str | None = None,
-    setup_script_path: str | None = None,
-    no_splash: bool = False,
-) -> None:
-    """Main CLI loop.
-
-    Args:
-        backend: Backend for file operations (CompositeBackend)
-        sandbox_type: Type of sandbox being used (e.g., "modal", "runloop", "daytona").
-                     If None, running in local mode.
-        sandbox_id: ID of the active sandbox
-        setup_script_path: Path to setup script that was run (if any)
-        no_splash: If True, skip displaying the startup splash screen
-    """
-    console.clear()
-    if not no_splash:
-        print_banner()
-
-    # Extract sandbox ID from backend if using sandbox mode
-    sandbox_id: str | None = None
-    if backend:
-        from deepagents.backends.composite import CompositeBackend
-
-        # Check if it's a CompositeBackend with a sandbox default backend
-        if isinstance(backend, CompositeBackend):
-            if isinstance(backend.default, SandboxBackendProtocol):
-                sandbox_id = backend.default.id
-        elif isinstance(backend, SandboxBackendProtocol):
-            sandbox_id = backend.id
-
-    # Display sandbox info persistently (survives console.clear())
-    if sandbox_type and sandbox_id:
-        console.print(f"[yellow]⚡ {sandbox_type.capitalize()} sandbox: {sandbox_id}[/yellow]")
-        if setup_script_path:
-            console.print(
-                f"[green]✓ Setup script ({setup_script_path}) completed successfully[/green]"
-            )
-        console.print()
-
-    if not settings.has_tavily:
-        console.print(
-            "[yellow]⚠ Web search disabled:[/yellow] TAVILY_API_KEY not found.",
-            style=COLORS["dim"],
-        )
-        console.print("  To enable web search, set your Tavily API key:", style=COLORS["dim"])
-        console.print("    export TAVILY_API_KEY=your_api_key_here", style=COLORS["dim"])
-        console.print(
-            "  Or add it to your .env file. Get your key at: https://tavily.com",
-            style=COLORS["dim"],
-        )
-        console.print()
-
-    console.print("... Ready to code! What would you like to build?", style=COLORS["agent"])
-
-    if sandbox_type:
-        working_dir = get_default_working_dir(sandbox_type)
-        console.print(f"  [dim]Local CLI directory: {Path.cwd()}[/dim]")
-        console.print(f"  [dim]Code execution: Remote sandbox ({working_dir})[/dim]")
-    else:
-        console.print(f"  [dim]Working directory: {Path.cwd()}[/dim]")
-
-    console.print()
-
-    if session_state.auto_approve:
-        console.print(
-            "  [yellow]⚡ Auto-approve: ON[/yellow] [dim](tools run without confirmation)[/dim]"
-        )
-        console.print()
-
-    # Localize modifier names and show key symbols (macOS vs others)
-    if sys.platform == "darwin":
-        tips = (
-            "  Tips: ⏎ Enter to submit, ⌥ Option + ⏎ Enter for newline (or Esc+Enter), "
-            "⌃E to open editor, ⌃T to toggle auto-approve, ⌃C to interrupt"
-        )
-    else:
-        tips = (
-            "  Tips: Enter to submit, Alt+Enter (or Esc+Enter) for newline, "
-            "Ctrl+E to open editor, Ctrl+T to toggle auto-approve, Ctrl+C to interrupt"
-        )
-    console.print(tips, style=f"dim {COLORS['dim']}")
-
-    console.print()
-
-    # Create prompt session, image tracker, and token tracker
-    image_tracker = ImageTracker()
-    session = create_prompt_session(assistant_id, session_state, image_tracker=image_tracker)
-    token_tracker = TokenTracker()
-    token_tracker.set_baseline(baseline_tokens)
-
-    while True:
-        try:
-            user_input = await session.prompt_async()
-            if session_state.exit_hint_handle:
-                session_state.exit_hint_handle.cancel()
-                session_state.exit_hint_handle = None
-            session_state.exit_hint_until = None
-            user_input = user_input.strip()
-        except EOFError:
-            break
-        except KeyboardInterrupt:
-            console.print("\nGoodbye!", style=COLORS["primary"])
-            break
-
-        if not user_input:
-            continue
-
-        # Check for slash commands first
-        if user_input.startswith("/"):
-            result = handle_command(user_input, agent, token_tracker)
-            if result == "exit":
-                console.print("\nGoodbye!", style=COLORS["primary"])
-                break
-            if result:
-                # Command was handled, continue to next input
-                continue
-
-        # Check for bash commands (!)
-        if user_input.startswith("!"):
-            execute_bash_command(user_input)
-            continue
-
-        # Handle regular quit keywords
-        if user_input.lower() in ["quit", "exit", "q"]:
-            console.print("\nGoodbye!", style=COLORS["primary"])
-            break
-
-        await execute_task(
-            user_input,
-            agent,
-            assistant_id,
-            session_state,
-            token_tracker,
-            backend=backend,
-            image_tracker=image_tracker,
-        )
-
-
-async def _run_agent_session(
-    model,
+async def run_textual_cli_async(
     assistant_id: str,
-    session_state,
-    sandbox_backend=None,
-    sandbox_type: str | None = None,
-    setup_script_path: str | None = None,
-) -> None:
-    """Helper to create agent and run CLI session.
-
-    Extracted to avoid duplication between sandbox and local modes.
-
-    Args:
-        model: LLM model to use
-        assistant_id: Agent identifier for memory storage
-        session_state: Session state with auto-approve settings
-        sandbox_backend: Optional sandbox backend for remote execution
-        sandbox_type: Type of sandbox being used
-        setup_script_path: Path to setup script that was run (if any)
-    """
-    # Create agent with conditional tools
-    tools = [http_request, fetch_url]
-    if settings.has_tavily:
-        tools.append(web_search)
-
-    agent, composite_backend = create_cli_agent(
-        model=model,
-        assistant_id=assistant_id,
-        tools=tools,
-        sandbox=sandbox_backend,
-        sandbox_type=sandbox_type,
-        auto_approve=session_state.auto_approve,
-    )
-
-    # Calculate baseline token count for accurate token tracking
-    from .agent import get_system_prompt
-    from .token_utils import calculate_baseline_tokens
-
-    agent_dir = settings.get_agent_dir(assistant_id)
-    system_prompt = get_system_prompt(assistant_id=assistant_id, sandbox_type=sandbox_type)
-    baseline_tokens = calculate_baseline_tokens(model, agent_dir, system_prompt, assistant_id)
-
-    await simple_cli(
-        agent,
-        assistant_id,
-        session_state,
-        baseline_tokens,
-        backend=composite_backend,
-        sandbox_type=sandbox_type,
-        setup_script_path=setup_script_path,
-        no_splash=session_state.no_splash,
-    )
-
-
-async def main(
-    assistant_id: str,
-    session_state,
-    sandbox_type: str = "none",
+    *,
+    auto_approve: bool = False,
+    sandbox_type: str = "none",  # str (not None) to match argparse choices
     sandbox_id: str | None = None,
-    setup_script_path: str | None = None,
-) -> None:
-    """Main entry point with conditional sandbox support.
+    sandbox_setup: str | None = None,
+    model_name: str | None = None,
+    thread_id: str | None = None,
+    is_resumed: bool = False,
+    initial_prompt: str | None = None,
+) -> int:
+    """Run the Textual CLI interface (async version).
 
     Args:
         assistant_id: Agent identifier for memory storage
-        session_state: Session state with auto-approve settings
-        sandbox_type: Type of sandbox ("none", "modal", "runloop", "daytona")
+        auto_approve: Whether to auto-approve tool usage
+        sandbox_type: Type of sandbox
+            ("none", "modal", "runloop", "daytona", "langsmith")
         sandbox_id: Optional existing sandbox ID to reuse
-        setup_script_path: Optional path to setup script to run in sandbox
+        sandbox_setup: Optional path to setup script to run in the sandbox
+            after creation.
+        model_name: Optional model name to use
+        thread_id: Thread ID to use (new or resumed)
+        is_resumed: Whether this is a resumed session
+        initial_prompt: Optional prompt to auto-submit when session starts
+
+    Returns:
+        The app's return code (0 for success, non-zero for error).
     """
-    model = create_model()
+    from deepagents_cli.app import run_textual_app
 
-    # Branch 1: User wants a sandbox
-    if sandbox_type != "none":
-        # Try to create sandbox
-        try:
-            console.print()
-            with create_sandbox(
-                sandbox_type, sandbox_id=sandbox_id, setup_script_path=setup_script_path
-            ) as sandbox_backend:
-                console.print(f"[yellow]⚡ Remote execution enabled ({sandbox_type})[/yellow]")
-                console.print()
+    model = create_model(model_name)
 
-                await _run_agent_session(
-                    model,
-                    assistant_id,
-                    session_state,
-                    sandbox_backend,
-                    sandbox_type=sandbox_type,
-                    setup_script_path=setup_script_path,
-                )
-        except (ImportError, ValueError, RuntimeError, NotImplementedError) as e:
-            # Sandbox creation failed - fail hard (no silent fallback)
-            console.print()
-            console.print("[red]❌ Sandbox creation failed[/red]")
-            console.print(f"[dim]{e}[/dim]")
-            console.show_cursor(True)
-            sys.exit(1)
-        except KeyboardInterrupt:
-            console.print("\n\n[yellow]Interrupted[/yellow]")
-            console.show_cursor(True)
-            sys.exit(0)
-        except Exception as e:
-            console.print(f"\n[bold red]❌ Error:[/bold red] {e}\n")
-            console.print_exception()
-            console.show_cursor(True)
-            sys.exit(1)
-
-    # Branch 2: User wants local mode (none or default)
+    # Show thread info
+    if is_resumed:
+        msg = Text("Resuming thread: ", style="green")
+        msg.append(str(thread_id))
+        console.print(msg)
     else:
+        msg = Text("Starting with thread: ", style="dim")
+        msg.append(str(thread_id), style="dim")
+        console.print(msg)
+
+    # Use async context manager for checkpointer
+    async with get_checkpointer() as checkpointer:
+        # Create agent with conditional tools
+        tools = [http_request, fetch_url]
+        if settings.has_tavily:
+            tools.append(web_search)
+
+        # Handle sandbox mode
+        sandbox_backend = None
+        sandbox_cm = None
+
+        if sandbox_type != "none":
+            try:
+                # Create sandbox context manager but keep it open
+                sandbox_cm = create_sandbox(
+                    sandbox_type,
+                    sandbox_id=sandbox_id,
+                    setup_script_path=sandbox_setup,
+                )
+                sandbox_backend = sandbox_cm.__enter__()  # noqa: PLC2801
+            except (ImportError, ValueError, RuntimeError, NotImplementedError) as e:
+                console.print()
+                console.print("[red]❌ Sandbox creation failed[/red]")
+                console.print(Text(str(e), style="dim"))
+                sys.exit(1)
+
         try:
-            await _run_agent_session(model, assistant_id, session_state, sandbox_backend=None)
-        except KeyboardInterrupt:
-            console.print("\n\n[yellow]Interrupted[/yellow]")
-            console.show_cursor(True)
-            sys.exit(0)
+            agent, composite_backend = create_cli_agent(
+                model=model,
+                assistant_id=assistant_id,
+                tools=tools,
+                sandbox=sandbox_backend,
+                sandbox_type=sandbox_type if sandbox_type != "none" else None,
+                auto_approve=auto_approve,
+                checkpointer=checkpointer,
+            )
         except Exception as e:
-            console.print(f"\n[bold red]❌ Error:[/bold red] {e}\n")
-            console.print_exception()
-            console.show_cursor(True)
+            error_text = Text("❌ Failed to create agent: ", style="red")
+            error_text.append(str(e))
+            console.print(error_text)
             sys.exit(1)
 
-
-def _cleanup_terminal() -> None:
-    """Cleanup function to restore terminal state on exit."""
-    try:
-        # Restore cursor visibility
-        console.show_cursor(True)
-        # Print a newline to avoid prompt issues
-        print()
-    except Exception:
-        # Ignore errors during cleanup
-        pass
+        # Run Textual app - errors propagate to caller
+        return_code = 0
+        try:
+            return_code = await run_textual_app(
+                agent=agent,
+                assistant_id=assistant_id,
+                backend=composite_backend,
+                auto_approve=auto_approve,
+                cwd=Path.cwd(),
+                thread_id=thread_id,
+                initial_prompt=initial_prompt,
+            )
+        finally:
+            # Clean up sandbox after app exits (success or error)
+            if sandbox_cm is not None:
+                with contextlib.suppress(Exception):
+                    sandbox_cm.__exit__(None, None, None)
+        return return_code
 
 
 def cli_main() -> None:
@@ -418,14 +445,22 @@ def cli_main() -> None:
     if sys.platform == "darwin":
         os.environ["GRPC_ENABLE_FORK_SUPPORT"] = "0"
 
-    # Register cleanup function to restore terminal on exit
-    atexit.register(_cleanup_terminal)
+    # Note: LANGSMITH_PROJECT is already overridden in config.py
+    # (before LangChain imports). This ensures agent traces use
+    # DEEPAGENTS_LANGSMITH_PROJECT while shell commands use the
+    # user's original LANGSMITH_PROJECT (via LocalShellBackend env).
 
     # Check dependencies first
     check_cli_dependencies()
 
     try:
         args = parse_args()
+
+        # Apply shell-allow-list from command line if provided (overrides env var)
+        if args.shell_allow_list:
+            from deepagents_cli.config import parse_shell_allow_list
+
+            settings.shell_allow_list = parse_shell_allow_list(args.shell_allow_list)
 
         if args.command == "help":
             show_help()
@@ -435,31 +470,136 @@ def cli_main() -> None:
             reset_agent(args.agent, args.source_agent)
         elif args.command == "skills":
             execute_skills_command(args)
-        else:
-            # Create session state from args
-            session_state = SessionState(auto_approve=args.auto_approve, no_splash=args.no_splash)
+        elif args.command == "threads":
+            # "ls" is an argparse alias for "list" — argparse stores the
+            # alias as-is in the namespace, so we must match both values.
+            if args.threads_command in {"list", "ls"}:
+                asyncio.run(
+                    list_threads_command(
+                        agent_name=getattr(args, "agent", None),
+                        limit=getattr(args, "limit", 20),
+                    )
+                )
+            elif args.threads_command == "delete":
+                asyncio.run(delete_thread_command(args.thread_id))
+            else:
+                # No subcommand provided, show threads help screen
+                show_threads_help()
+        elif args.non_interactive_message:
+            # Non-interactive mode - execute single task and exit
+            from deepagents_cli.non_interactive import run_non_interactive
 
-            # API key validation happens in create_model()
-            asyncio.run(
-                main(
-                    args.agent,
-                    session_state,
-                    args.sandbox,
-                    args.sandbox_id,
-                    args.sandbox_setup,
+            exit_code = asyncio.run(
+                run_non_interactive(
+                    message=args.non_interactive_message,
+                    assistant_id=args.agent,
+                    model_name=getattr(args, "model", None),
+                    sandbox_type=args.sandbox,
+                    sandbox_id=args.sandbox_id,
+                    sandbox_setup=getattr(args, "sandbox_setup", None),
+                    quiet=args.quiet,
                 )
             )
+            sys.exit(exit_code)
+        else:
+            # Interactive mode - handle thread resume
+            thread_id = None
+            is_resumed = False
+
+            if args.resume_thread == "__MOST_RECENT__":
+                # -r (no ID): Get most recent thread
+                # If --agent specified, filter by that agent; otherwise get
+                # most recent overall
+                agent_filter = args.agent if args.agent != DEFAULT_AGENT_NAME else None
+                thread_id = asyncio.run(get_most_recent(agent_filter))
+                if thread_id:
+                    is_resumed = True
+                    agent_name = asyncio.run(get_thread_agent(thread_id))
+                    if agent_name:
+                        args.agent = agent_name
+                else:
+                    if agent_filter:
+                        msg = Text("No previous thread for '", style="yellow")
+                        msg.append(args.agent)
+                        msg.append("', starting new.", style="yellow")
+                    else:
+                        msg = Text("No previous threads, starting new.", style="yellow")
+                    console.print(msg)
+
+            elif args.resume_thread:
+                # -r <ID>: Resume specific thread
+                if asyncio.run(thread_exists(args.resume_thread)):
+                    thread_id = args.resume_thread
+                    is_resumed = True
+                    if args.agent == DEFAULT_AGENT_NAME:
+                        agent_name = asyncio.run(get_thread_agent(thread_id))
+                        if agent_name:
+                            args.agent = agent_name
+                else:
+                    error_msg = Text("Thread '", style="red")
+                    error_msg.append(args.resume_thread)
+                    error_msg.append("' not found.", style="red")
+                    console.print(error_msg)
+
+                    # Check for similar thread IDs
+                    similar = asyncio.run(find_similar_threads(args.resume_thread))
+                    if similar:
+                        console.print()
+                        console.print("[yellow]Did you mean?[/yellow]")
+                        for tid in similar:
+                            hint = Text("  deepagents -r ", style="cyan")
+                            hint.append(str(tid), style="cyan")
+                            console.print(hint)
+                        console.print()
+
+                    console.print(
+                        "[dim]Use 'deepagents threads list' to see "
+                        "available threads.[/dim]"
+                    )
+                    console.print(
+                        "[dim]Use 'deepagents -r' to resume the most "
+                        "recent thread.[/dim]"
+                    )
+                    sys.exit(1)
+
+            # Generate new thread ID if not resuming
+            if thread_id is None:
+                thread_id = generate_thread_id()
+
+            # Run Textual CLI
+            return_code = 0
+            try:
+                return_code = asyncio.run(
+                    run_textual_cli_async(
+                        assistant_id=args.agent,
+                        auto_approve=args.auto_approve,
+                        sandbox_type=args.sandbox,
+                        sandbox_id=args.sandbox_id,
+                        sandbox_setup=getattr(args, "sandbox_setup", None),
+                        model_name=getattr(args, "model", None),
+                        thread_id=thread_id,
+                        is_resumed=is_resumed,
+                        initial_prompt=getattr(args, "initial_prompt", None),
+                    )
+                )
+            except Exception as e:
+                error_msg = Text("\nApplication error: ", style="red")
+                error_msg.append(str(e))
+                console.print(error_msg)
+                console.print(Text(traceback.format_exc(), style="dim"))
+                sys.exit(1)
+
+            # Show resume hint on exit (only for new threads with successful exit)
+            if thread_id and not is_resumed and return_code == 0:
+                console.print()
+                console.print("[dim]Resume this thread with:[/dim]")
+                hint = Text("deepagents -r ", style="cyan")
+                hint.append(str(thread_id), style="cyan")
+                console.print(hint)
     except KeyboardInterrupt:
         # Clean exit on Ctrl+C - suppress ugly traceback
         console.print("\n\n[yellow]Interrupted[/yellow]")
-        console.show_cursor(True)
         sys.exit(0)
-    except Exception as e:
-        # Catch any other exceptions to ensure cursor is restored
-        console.print(f"\n[bold red]❌ Unexpected error:[/bold red] {e}\n")
-        console.print_exception()
-        console.show_cursor(True)
-        sys.exit(1)
 
 
 if __name__ == "__main__":

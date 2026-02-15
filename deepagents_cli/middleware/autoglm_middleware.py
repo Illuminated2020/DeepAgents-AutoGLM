@@ -1087,14 +1087,23 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 end = action.get("end")
                 if not start or not end or len(start) != 2 or len(end) != 2:
                     return {"success": False, "message": "Invalid swipe coordinates"}
-                # Convert to absolute coordinates
-                start_x = int(start[0] / 1000 * screen_width)
-                start_y = int(start[1] / 1000 * screen_height)
-                end_x = int(end[0] / 1000 * screen_width)
-                end_y = int(end[1] / 1000 * screen_height)
+                coordinate_mode = action.get("coordinate_mode")
+                if coordinate_mode == "pixel" or max(start[0], start[1], end[0], end[1]) > 1000:
+                    start_x = int(start[0])
+                    start_y = int(start[1])
+                    end_x = int(end[0])
+                    end_y = int(end[1])
+                else:
+                    start_x = int(start[0] / 1000 * screen_width)
+                    start_y = int(start[1] / 1000 * screen_height)
+                    end_x = int(end[0] / 1000 * screen_width)
+                    end_y = int(end[1] / 1000 * screen_height)
 
-                # Use None for duration to auto-calculate based on distance
-                self.controller.swipe(start_x, start_y, end_x, end_y, duration=None)
+                duration_ms = action.get("duration_ms")
+                duration = None
+                if isinstance(duration_ms, (int, float)):
+                    duration = duration_ms / 1000.0
+                self.controller.swipe(start_x, start_y, end_x, end_y, duration=duration)
                 return {"success": True, "message": "Executed swipe"}
 
             if action_name == "Back":

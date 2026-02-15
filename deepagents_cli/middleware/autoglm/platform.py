@@ -148,7 +148,12 @@ class AndroidController:
         # Convert duration from seconds to milliseconds for ADB
         duration_ms = int(duration * 1000) if duration is not None else None
         adb_controller.swipe(
-            start_x, start_y, end_x, end_y, duration=duration_ms, device_id=self.device_id
+            start_x,
+            start_y,
+            end_x,
+            end_y,
+            duration_ms=duration_ms,
+            device_id=self.device_id,
         )
 
     def type_text(self, text: str) -> None:
