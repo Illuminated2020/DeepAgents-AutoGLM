@@ -31,6 +31,7 @@ from deepagents_cli.config import (
     is_shell_command_allowed,
     settings,
 )
+from deepagents_cli.middleware.autoglm_middleware import AutoGLMMiddleware
 from deepagents_cli.textual_adapter import TextualUIAdapter, execute_task_textual
 from deepagents_cli.widgets.approval import ApprovalMenu
 from deepagents_cli.widgets.chat_input import ChatInput
@@ -1407,6 +1408,7 @@ class DeepAgentsApp(App):
         """
         # If agent is running, interrupt it and discard queued messages
         if self._agent_running and self._agent_worker:
+            AutoGLMMiddleware.interrupt_active_tasks()
             self._pending_messages.clear()
             for w in self._queued_widgets:
                 w.remove()
@@ -1440,6 +1442,7 @@ class DeepAgentsApp(App):
 
         # If agent is running, interrupt it and discard queued messages
         if self._agent_running and self._agent_worker:
+            AutoGLMMiddleware.interrupt_active_tasks()
             self._pending_messages.clear()
             for w in self._queued_widgets:
                 w.remove()

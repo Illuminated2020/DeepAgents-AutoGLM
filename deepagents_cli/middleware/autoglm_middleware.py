@@ -22,6 +22,7 @@ import signal
 import tempfile
 import threading
 import time
+import weakref
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -253,6 +254,8 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
     4. **Avoid concurrent tasks**: Only one phone_task should run at a time (enforced by lock)
     """
 
+    _instances: weakref.WeakSet[AutoGLMMiddleware] = weakref.WeakSet()
+
     def __init__(self, config: AutoGLMConfig) -> None:
         """Initialize AutoGLM middleware.
 
@@ -264,6 +267,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         """
         super().__init__()
         self.config = config
+        self._instances.add(self)
 
         if config.vision_model is None:
             msg = "vision_model must be provided in AutoGLMConfig"
@@ -306,6 +310,25 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         # Build tool list
         self.tools = []
         self._define_tools()
+
+    @classmethod
+    def interrupt_active_tasks(cls) -> bool:
+        interrupted = False
+        for instance in list(cls._instances):
+            if instance._phone_task_active:
+                instance._request_external_interrupt()
+                interrupted = True
+        return interrupted
+
+    def _request_external_interrupt(self) -> None:
+        if not self._phone_task_active:
+            return
+        current_time = time.time()
+        if current_time - self._last_interrupt_time > self._interrupt_reset_timeout:
+            self._interrupt_count = 0
+        self._interrupt_count += 1
+        self._last_interrupt_time = current_time
+        self._interrupt_flag.set()
 
     def before_agent(self, request: ModelRequest) -> ModelRequest | Command:
         """Perform system checks before agent starts.

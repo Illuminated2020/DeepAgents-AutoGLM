@@ -358,6 +358,19 @@ def _format_execute_description(
     return f"Execute Command: {command}\nWorking Directory: {Path.cwd()}"
 
 
+def _format_shell_description(
+    tool_call: ToolCall, _state: AgentState[Any], _runtime: Runtime[Any]
+) -> str:
+    """Format shell tool call for approval prompt.
+
+    Returns:
+        Formatted description string for the shell tool call.
+    """
+    args = tool_call["args"]
+    command = args.get("command", "N/A")
+    return f"Shell Command: {command}\nWorking Directory: {Path.cwd()}"
+
+
 def _add_interrupt_on() -> dict[str, InterruptOnConfig]:
     """Configure human-in-the-loop interrupt settings for all gated tools.
 
