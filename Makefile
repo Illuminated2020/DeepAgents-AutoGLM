@@ -12,13 +12,13 @@ TEST_FILE ?= tests/unit_tests
 INTEGRATION_FILES ?= tests/integration_tests
 
 test:
-	uv run pytest --disable-socket --allow-unix-socket $(TEST_FILE)
+	uv run --group test pytest --disable-socket --allow-unix-socket $(TEST_FILE)
 
 test_integration:
-	uv run pytest $(INTEGRATION_FILES)
+	uv run --group test pytest $(INTEGRATION_FILES)
 
 test_watch:
-	uv run ptw . -- $(TEST_FILE)
+	uv run --group test ptw . -- $(TEST_FILE)
 
 run:
 	uvx --no-cache --reinstall .
@@ -62,5 +62,4 @@ help:
 	@echo 'test                         - run unit tests'
 	@echo 'test TEST_FILE=<test_file>   - run all tests in file'
 	@echo '-- DOCUMENTATION tasks are from the top-level Makefile --'
-
 

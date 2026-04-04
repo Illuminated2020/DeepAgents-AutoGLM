@@ -15,11 +15,9 @@ class TestValidateSkillName:
         valid_names = [
             "web-research",
             "langgraph-docs",
-            "my_skill",
             "skill123",
-            "MySkill",
             "skill-with-many-parts",
-            "skill_with_underscores",
+            "cafe-tool",
         ]
         for name in valid_names:
             is_valid, error = _validate_name(name)
@@ -42,7 +40,7 @@ class TestValidateSkillName:
             is_valid, error = _validate_name(name)
             assert not is_valid, f"Malicious name '{name}' was accepted"
             assert error != ""
-            assert ".." in error or "traversal" in error.lower()
+            assert "path" in error.lower() or "component" in error.lower()
 
     def test_absolute_paths(self):
         """Test that absolute paths are blocked."""

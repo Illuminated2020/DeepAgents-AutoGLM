@@ -215,9 +215,13 @@ class TestGetClipboardImage:
         mock_macos_fn.assert_called_once()
 
     @patch("deepagents_cli.image_utils.sys.platform", "darwin")
+    @patch("deepagents_cli.image_utils._get_executable")
     @patch("deepagents_cli.image_utils.subprocess.run")
-    def test_pngpaste_success(self, mock_run: MagicMock) -> None:
+    def test_pngpaste_success(
+        self, mock_run: MagicMock, mock_get_executable: MagicMock
+    ) -> None:
         """Test successful image retrieval via pngpaste."""
+        mock_get_executable.side_effect = lambda name: f"/usr/bin/{name}"
         # Create a small valid PNG
         img = Image.new("RGB", (10, 10), color="blue")
         buffer = io.BytesIO()
@@ -236,9 +240,13 @@ class TestGetClipboardImage:
         assert len(result.base64_data) > 0
 
     @patch("deepagents_cli.image_utils.sys.platform", "darwin")
+    @patch("deepagents_cli.image_utils._get_executable")
     @patch("deepagents_cli.image_utils.subprocess.run")
-    def test_pngpaste_not_installed_falls_back(self, mock_run: MagicMock) -> None:
+    def test_pngpaste_not_installed_falls_back(
+        self, mock_run: MagicMock, mock_get_executable: MagicMock
+    ) -> None:
         """Test fallback to osascript when pngpaste is not installed."""
+        mock_get_executable.side_effect = lambda name: f"/usr/bin/{name}"
         # First call (pngpaste) raises FileNotFoundError
         # Second call (osascript clipboard info) returns no image info
         mock_run.side_effect = [

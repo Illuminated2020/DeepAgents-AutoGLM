@@ -42,8 +42,8 @@ $ deepagents
 
 See DeepAgents-AutoGLM in action with real-world use cases:
 
-- 🎨 **[Xiaohongshu Auto-Posting Demo](http://xhslink.com/o/FdRsaQQpUz)** - Demonstrates how the Agent automatically searches content, generates posts, and publishes to Xiaohongshu
-- 💬 **[QQ Auto-Reply Demo](http://xhslink.com/o/6v5umdBoznW)** - Shows how to intelligently identify and automatically reply to unread QQ messages
+- 🎨 **[Xiaohongshu Auto-Posting Demo](https://b23.tv/t9YX630)** - Demonstrates how the Agent automatically searches content, generates posts, and publishes to Xiaohongshu
+- 💬 **[QQ Auto-Reply Demo](https://b23.tv/ZRJpPwD)** - Shows how to intelligently identify and automatically reply to unread QQ messages
 
 ## 🚀 Quick Start
 

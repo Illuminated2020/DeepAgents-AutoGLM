@@ -42,8 +42,8 @@ $ deepagents
 
 查看 DeepAgents-AutoGLM 在真实场景中的实际应用效果：
 
-- 🎨 **[小红书自动发布演示](http://xhslink.com/o/FdRsaQQpUz)** - 展示如何使用 Agent 自动搜索内容、生成文案并发布到小红书
-- 💬 **[QQ 未读消息自动回复演示](http://xhslink.com/o/6v5umdBoznW)** - 展示如何智能识别并自动回复 QQ 未读消息
+- 🎨 **[小红书自动发布演示](https://b23.tv/t9YX630)** - 展示如何使用 Agent 自动搜索内容、生成文案并发布到小红书
+- 💬 **[QQ 未读消息自动回复演示](https://b23.tv/ZRJpPwD)** - 展示如何智能识别并自动回复 QQ 未读消息
 
 ## 🚀 快速开始
 

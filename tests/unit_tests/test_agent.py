@@ -12,6 +12,7 @@ from deepagents_cli.agent import (
     _format_web_search_description,
     _format_write_file_description,
 )
+from deepagents_cli.config import get_glyphs
 
 
 def test_format_write_file_description_create_new_file(tmp_path: Path) -> None:
@@ -122,7 +123,7 @@ def test_format_web_search_description():
 
     assert "Query: python async programming" in description
     assert "Max results: 10" in description
-    assert "⚠️  This will use Tavily API credits" in description
+    assert f"{get_glyphs().warning}  This will use Tavily API credits" in description
 
 
 def test_format_web_search_description_default_max_results():
@@ -162,7 +163,10 @@ def test_format_fetch_url_description():
 
     assert "URL: https://example.com/docs" in description
     assert "Timeout: 60s" in description
-    assert "⚠️  Will fetch and convert web content to markdown" in description
+    assert (
+        f"{get_glyphs().warning}  Will fetch and convert web content to markdown"
+        in description
+    )
 
 
 def test_format_fetch_url_description_default_timeout():
@@ -204,7 +208,7 @@ def test_format_task_description():
     assert "Task Instructions:" in description
     assert "Analyze code structure and identify the main components." in description
     assert (
-        "⚠️  Subagent will have access to file operations and shell commands"
+        f"{get_glyphs().warning}  Subagent will have access to file operations and shell commands"
         in description
     )
 
@@ -267,4 +271,4 @@ def test_format_execute_description():
     description = _format_execute_description(tool_call, state, runtime)
 
     assert "Execute Command: python script.py" in description
-    assert "Location: Remote Sandbox" in description
+    assert "Working Directory:" in description

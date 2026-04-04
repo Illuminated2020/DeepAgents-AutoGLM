@@ -294,7 +294,7 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         # Note: These are instance-level variables, so concurrent phone_task calls
         # will share the same interrupt state. Since phone_task controls a physical
         # device, concurrent execution is not recommended. We use a lock to prevent it.
-        self._task_lock = threading.Lock()
+        self._task_lock = asyncio.Lock()
         self._interrupt_flag = threading.Event()
         self._interrupt_count = 0  # Track number of Ctrl+C presses
         self._last_interrupt_time = 0.0  # Track timestamp of last Ctrl+C
@@ -380,6 +380,8 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             if self.config.device_id is None:
                 devices = adb_controller.list_devices()
                 self.config.device_id = devices[0].device_id
+                if hasattr(self.controller, "device_id"):
+                    self.controller.device_id = self.config.device_id
                 if self.config.verbose:
                     print(
                         f"Using Android device: {self.config.device_id} ({devices[0].model})"
@@ -401,6 +403,8 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
 
                 devices = ios_connection.list_devices()
                 self.config.ios_device_id = devices[0].device_id
+                if hasattr(self.controller, "device_id"):
+                    self.controller.device_id = self.config.ios_device_id
                 if self.config.verbose:
                     device_name = devices[0].device_name or "Unknown"
                     print(
@@ -649,13 +653,14 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
         """
         # Acquire lock to prevent concurrent phone_task execution
         # Since we're controlling a physical device, only one task should run at a time
-        if not self._task_lock.acquire(blocking=False):
+        acquired_task_lock = False
+        if self._task_lock.locked():
             # Another task is already running
             if self.config.verbose:
                 print("\n⚠️  Another phone_task is already running. Waiting...")
 
-            # Wait for the lock (this makes the call blocking)
-            self._task_lock.acquire()
+        await self._task_lock.acquire()
+        acquired_task_lock = True
 
         # Mark phone_task as active so signal handler will respond
         self._phone_task_active = True
@@ -1045,7 +1050,8 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
             # Note: _interrupt_count is managed by time-based auto-reset, no manual reset needed
             self._active_task_count = max(0, self._active_task_count - 1)
             # Release the lock to allow next task to run
-            self._task_lock.release()
+            if acquired_task_lock:
+                self._task_lock.release()
 
     def _cleanup_resources(self) -> None:
         """Clean up resources after task completion or interruption.
@@ -1359,13 +1365,16 @@ class AutoGLMMiddleware(AgentMiddleware[AgentState, Any]):
                 Path to the saved screenshot.
             """
             try:
-                screenshot_base64, width, height = self.controller.take_screenshot()
+                screenshot = self.controller.take_screenshot()
                 screenshot_path = self.screenshot_dir / f"manual_{int(time.time())}.png"
                 with Path(screenshot_path).open("wb") as f:
                     # Decode base64 string to binary data for file writing
-                    f.write(base64.b64decode(screenshot_base64))
+                    f.write(base64.b64decode(screenshot.base64_data))
                 return ToolMessage(
-                    content=f"Screenshot saved to: {screenshot_path}\nSize: {width}x{height}",
+                    content=(
+                        f"Screenshot saved to: {screenshot_path}\n"
+                        f"Size: {screenshot.width}x{screenshot.height}"
+                    ),
                     tool_call_id=runtime.tool_call_id,
                     name="phone_screenshot",
                     status="success",
